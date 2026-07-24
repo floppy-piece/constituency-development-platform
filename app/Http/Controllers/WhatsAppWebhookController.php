@@ -2,15 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\User;
-use App\Models\Mp;
+use App\Http\Controllers\Controller;
 use App\Models\ConstituencyRequest;
+use App\Models\Mp;
+use App\Models\User;
 use App\Services\Gemma4Service;
-use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class WhatsAppWebhookController extends Controller
 {
@@ -22,7 +23,7 @@ class WhatsAppWebhookController extends Controller
     }
 
     /**
-     * 1. META WEBHOOK VERIFICATION HANDSHAKE (GET Request)
+     * Meta Webhook Verification Handshake (GET Request)
      */
     public function verifyWebhook(Request $request)
     {
@@ -40,7 +41,7 @@ class WhatsAppWebhookController extends Controller
     }
 
     /**
-     * 2. INCOMING MESSAGE HANDLER (POST Request)
+     * Incoming Message Handler (POST Request)
      */
     public function handleWebhook(Request $request)
     {
@@ -52,78 +53,134 @@ class WhatsAppWebhookController extends Controller
             return response()->json(['status' => 'ignored'], 200);
         }
 
-        // Retrieve or create User (Citizen)
-        $user = User::firstOrCreate(['phone_number' => $phone]);
+        try {
+            // Retrieve or create User (Citizen)
+            $user = User::firstOrCreate(
+                ['phone_number' => $phone],
+                ['whatsapp_linked_at' => now()]
+            );
 
-        // 🛑 Rate Limit Check (1 request every 2 hours)
-        $lastRequest = ConstituencyRequest::where('user_id', $user->id)
-            ->where('created_at', '>=', now()->subHours(2))
-            ->latest()
-            ->first();
+            $userId = $user->getKey();
 
-        if ($lastRequest) {
-            $nextAllowed = $lastRequest->created_at->addHours(2)->diffForHumans();
-            $this->sendWhatsAppMessage($phone, "You can only send one request every 2 hours. Next request available: {$nextAllowed}.");
-            return response()->json(['status' => 'rate_limited'], 200);
-        }
+            // 🛑 Rate Limit Check (1 request every 2 hours)
+            $lastRequest = ConstituencyRequest::where('user_id', $userId)
+                ->where('created_at', '>=', now()->subHours(2))
+                ->latest()
+                ->first();
 
-        // Process File / Text Payload
-        $filePath = null;
-        $fileType = 'text';
-        $rawText = $messageData['text']['body'] ?? '';
+            if ($lastRequest) {
+                $nextAllowed = $lastRequest->created_at->addHours(2)->diffForHumans();
+                $this->sendWhatsAppMessage($phone, "You can only send one request every 2 hours. Next request available: {$nextAllowed}.");
+                return response()->json(['status' => 'rate_limited'], 200);
+            }
 
-        if (isset($messageData['image'])) {
-            $fileType = 'image';
-            $filePath = $this->downloadWhatsAppMedia($messageData['image']['id'], 'jpg');
-        } elseif (isset($messageData['audio'])) {
-            $fileType = 'audio';
-            $filePath = $this->downloadWhatsAppMedia($messageData['audio']['id'], 'ogg');
-        }
+            // Location Coordinates from WhatsApp if provided
+            $latitude = $messageData['location']['latitude'] ?? null;
+            $longitude = $messageData['location']['longitude'] ?? null;
 
-        // Fetch assigned MP for the constituency (defaults to active MP)
-        $assignedMp = Mp::first(); 
+            // Resolve MP dynamically based on user/location context
+            $assignedMp = $this->resolveMpForUser($user, $latitude, $longitude);
+            $mpId = $assignedMp->mp_id ?? $assignedMp->id ?? 1;
 
-        // 🤖 Gemma 4 Processing Engine
-        $analysis = $this->gemmaService->processRequestData(
-            $rawText, 
-            $filePath, 
-            $fileType, 
-            $user->is_within_constituency ?? true
-        );
+            // Process File / Text Payload
+            $filePath = null;
+            $fileType = 'text';
+            $rawText = $messageData['text']['body'] ?? ($messageData['caption'] ?? '');
 
-        // Deduplication & Similarity Counter
-        $similarRequest = ConstituencyRequest::where('category', $analysis['category'] ?? 'General')
-            ->where('urgency', $analysis['urgency'] ?? 'low')
-            ->where('mp_id', $assignedMp->id ?? 1)
-            ->where('created_at', '>=', now()->subDays(3))
-            ->first();
+            if (isset($messageData['image'])) {
+                $fileType = 'image';
+                $filePath = $this->downloadWhatsAppMedia($messageData['image']['id'], 'jpg');
+            } elseif (isset($messageData['audio'])) {
+                $fileType = 'audio';
+                $filePath = $this->downloadWhatsAppMedia($messageData['audio']['id'], 'ogg');
+            } elseif (isset($messageData['video'])) {
+                $fileType = 'video';
+                $filePath = $this->downloadWhatsAppMedia($messageData['video']['id'], 'mp4');
+            }
 
-        if ($similarRequest) {
-            $similarRequest->increment('similar_count');
-        } else {
-            ConstituencyRequest::create([
-                'user_id'          => $user->id, // Correct foreign key reference
-                'mp_id'            => $assignedMp->id ?? 1,
-                'raw_message'      => $rawText,
-                'content'          => $analysis['translated_summary'] ?? $rawText,
-                'upload_file_path' => $filePath,
-                'file_type'        => $fileType,
-                'urgency'          => $analysis['urgency'] ?? 'low',
-                'category'         => $analysis['category'] ?? 'General',
-                'similar_count'    => 1
+            // Retrieve recent requests for LLM deduplication comparison
+            $recentRequests = ConstituencyRequest::where('mp_id', $mpId)
+                ->where('created_at', '>=', now()->subDays(3))
+                ->latest()
+                ->take(30)
+                ->get(['request_id', 'raw_message', 'content', 'created_at']);
+
+            // 🤖 Gemma 4 Processing Engine
+            $analysis = $this->gemmaService->processRequestData(
+                $rawText,
+                $filePath,
+                $fileType,
+                $user->is_within_constituency ?? true,
+                $recentRequests
+            );
+
+            $urgency = $analysis['urgency'] ?? 'low';
+            $matchedRequestId = $analysis['matched_request_id'] ?? null;
+
+            // Deduplication Check
+            if ($matchedRequestId) {
+                $similarRequest = ConstituencyRequest::where('request_id', $matchedRequestId)
+                    ->where('mp_id', $mpId)
+                    ->first();
+
+                if ($similarRequest) {
+                    $similarRequest->touch();
+                }
+            } else {
+                ConstituencyRequest::create([
+                    'user_id'          => $userId,
+                    'mp_id'            => $mpId,
+                    'raw_message'      => $rawText,
+                    'content'          => $analysis['translated_summary'] ?? $rawText,
+                    'upload_file_path' => $filePath,
+                    'file_type'        => $fileType,
+                    'urgency'          => $urgency,
+                    'category'         => $analysis['category'] ?? 'General',
+                    'latitude'         => $latitude,
+                    'longitude'        => $longitude,
+                ]);
+            }
+
+            // Send Confirmation Message back to Citizen
+            $mpName = $assignedMp->mp_name ?? 'your MP';
+            $constituencyName = $assignedMp->constituency_name ?? $assignedMp->constituency ?? '';
+            
+            $confirmationMessage = "Your request has been forwarded to {$mpName}";
+            if (!empty($constituencyName)) {
+                $confirmationMessage .= " ({$constituencyName})";
+            }
+            $confirmationMessage .= ". You can send another request after two hours.";
+
+            $this->sendWhatsAppMessage($phone, $confirmationMessage);
+
+            return response()->json(['status' => 'success'], 200);
+
+        } catch (Throwable $e) {
+            Log::error("WhatsApp Webhook Error for phone {$phone}: ".$e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'payload' => $messageData,
             ]);
+
+            $this->sendWhatsAppMessage(
+                $phone,
+                '⚠️ Sorry, your request failed to process due to a system error. Please try again after a few hours, thank you 🙂.'
+            );
+
+            return response()->json(['status' => 'error', 'message' => 'Processed with error'], 200);
+        }
+    }
+
+    /**
+     * Dynamically match MP based on constituency or fallback.
+     */
+    private function resolveMpForUser(User $user, ?float $latitude, ?float $longitude): Mp
+    {
+        if (!empty($user->constituency_name)) {
+            $mp = Mp::where('constituency_name', $user->constituency_name)->first();
+            if ($mp) return $mp;
         }
 
-        // Update user timestamp
-        $user->touch(); // updates updated_at
-
-        // Send Success Reply to Citizen
-        $this->sendWhatsAppMessage(
-            $phone, 
-            "Your request has been received successfully and is being processed, you can send another request after the next two hours."
-        );
-
-        return response()->json(['status' => 'success'], 200);
+        return Mp::first() ?? new Mp(['mp_id' => 1, 'mp_name' => 'Default MP']);
     }
 
     /**

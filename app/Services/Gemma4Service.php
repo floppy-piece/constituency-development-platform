@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -264,51 +265,75 @@ class Gemma4Service
      */
     public function translateContent(string|array $content, string $targetLanguage): string|array
     {
-        if (empty($this->apiKey) || $targetLanguage === 'en') {
+        if (empty($content)) {
+            return $content ?? '';
+        }
+    
+        if (empty($this->apiKey) || strtolower($targetLanguage) === 'en') {
             return $content;
         }
-
-        $isInputArray = is_array($content);
-        $textToTranslate = $isInputArray ? json_encode($content) : $content;
-
-        $systemPrompt = "You are an expert translator specializing in Kenyan languages and dialects (including Swahili, Sheng, Kikuyu, Luo, Luhya, Kalenjin, etc.).\n"
-            . "Translate the following user-facing application UI content into: {$targetLanguage}.\n"
-            . "Rules:\n"
-            . "1. Preserve HTML tags, variables (e.g. :name, {id}), and dynamic placeholders exactly as they are.\n"
-            . "2. Maintain natural, culturally appropriate, and clear local terminology.\n"
-            . "3. Output ONLY the raw translated text (or original JSON structure if input is JSON) without any commentary or markdown wrappers.";
-
-        $url = rtrim($this->endpoint, '/') . "/{$this->model}:generateContent?key={$this->apiKey}";
-
-        try {
-            $response = Http::withHeaders(['Content-Type' => 'application/json'])
-                ->post($url, [
-                    'system_instruction' => [
-                        'parts' => [['text' => $systemPrompt]],
-                    ],
-                    'contents' => [
-                        ['role' => 'user', 'parts' => [['text' => $textToTranslate]]],
-                    ],
-                    'generationConfig' => [
-                        'temperature' => 0.1,
-                    ],
-                ]);
-
-            if ($response->successful()) {
-                $translatedText = $response->json('candidates.0.content.parts.0.text') ?? $textToTranslate;
-
-                Log::info("Gemma 4 Web Content Translation Success [{$targetLanguage}]", [
-                    'original'   => $textToTranslate,
-                    'translated' => $translatedText,
-                ]);
-
-                return $isInputArray ? (json_decode($translatedText, true) ?? $content) : trim($translatedText);
+    
+        $cacheKey = 'gemma_trans_' . md5(is_array($content) ? json_encode($content) : $content) . '_' . strtolower($targetLanguage);
+    
+        return Cache::rememberForever($cacheKey, function () use ($content, $targetLanguage) {
+            $isInputArray = is_array($content);
+            $textToTranslate = $isInputArray ? json_encode($content, JSON_UNESCAPED_UNICODE) : $content;
+    
+            $systemPrompt = "You are a direct translation engine for a Kenyan web app.\n"
+                . "Target Language: {$targetLanguage}.\n"
+                . "Output a JSON object with a single key: \"translated\".\n"
+                . "Do not include explanations or markdown fences.";
+    
+            $url = rtrim($this->endpoint, '/') . "/{$this->model}:generateContent?key={$this->apiKey}";
+    
+            try {
+                $response = Http::withHeaders(['Content-Type' => 'application/json'])
+                    ->timeout(15)
+                    ->post($url, [
+                        'system_instruction' => [
+                            'parts' => [['text' => $systemPrompt]],
+                        ],
+                        'contents' => [
+                            ['role' => 'user', 'parts' => [['text' => $textToTranslate]]],
+                        ],
+                        'generationConfig' => [
+                            'temperature' => 0.1,
+                            'responseMimeType' => 'application/json',
+                        ],
+                    ]);
+    
+                if ($response->successful()) {
+                    $rawResponse = $response->json('candidates.0.content.parts.0.text') ?? '';
+    
+                    $cleanText = $textToTranslate;
+    
+                    // 1. Extract the JSON object substring { ... } ignoring chain-of-thought prefix
+                    if (preg_match('/\{[\s\S]*\}/', $rawResponse, $matches)) {
+                        $json = json_decode($matches[0], true);
+                        if (isset($json['translated'])) {
+                            $cleanText = $json['translated'];
+                        }
+                    } else {
+                        // Fallback: If no JSON structure is found, strip backticks/bullets and grab the last line
+                        $lines = array_values(array_filter(array_map('trim', explode("\n", $rawResponse))));
+                        if (!empty($lines)) {
+                            $lastLine = end($lines);
+                            $cleanText = preg_replace('/^[\*\-\s"`\']+|[\*\-\s"`\']+$/', '', $lastLine);
+                        }
+                    }
+    
+                    Log::info("Gemma 4 Translation Success [{$targetLanguage}]", [
+                        'translated' => $cleanText
+                    ]);
+    
+                    return $isInputArray ? (json_decode($cleanText, true) ?? $content) : trim($cleanText);
+                }
+            } catch (\Throwable $e) {
+                Log::error("Gemma 4 Translation Error: " . $e->getMessage());
             }
-        } catch (Throwable $e) {
-            Log::error("Gemma 4 Translation Error: {$e->getMessage()}");
-        }
-
-        return $content;
+    
+            return $content;
+        });
     }
 
     /**

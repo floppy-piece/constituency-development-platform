@@ -21,6 +21,7 @@ return [
         'access_token'     => env('WHATSAPP_ACCESS_TOKEN'),
         'verify_token'     => env('WHATSAPP_WEBHOOK_VERIFY_TOKEN'),
         'app_secret'       => env('WHATSAPP_APP_SECRET'),
+        'display_number'   => env('WHATSAPP_DISPLAY_NUMBER'),
     ],
 
     'gemma' => [

@@ -5,7 +5,8 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use App\Http\Middleware\SanitizeInputs;
-
+use App\Http\Middleware\EnsureMpAccess;
+use App\Http\Middleware\SetAppLanguage;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -16,6 +17,16 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(SanitizeInputs::class);
+        //$middleware->append(EnsureMpAccess::class);
+        $middleware->web(append: [
+            SetAppLanguage::class,
+            
+        ]);
+        
+        $middleware->validateCsrfTokens(except: [
+            'set-language', // Temporary check
+        ]);
+        
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

@@ -11,6 +11,12 @@ use App\Http\Controllers\Api\TelegramWebhookController;
 use App\Http\Controllers\MpController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\MP\AnalyticsController;
+use App\Http\Controllers\WhatsAppWebhookController;
+
+
+// WhatsApp Webhook Endpoints
+Route::get('/whatsapp/webhook', [WhatsAppWebhookController::class, 'verifyWebhook']);
+Route::post('/whatsapp/webhook', [WhatsAppWebhookController::class, 'handleWebhook']);
 
 
 /*

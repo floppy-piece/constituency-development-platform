@@ -3,21 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- CSRF Token -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ config('app.name', 'Constituency Voice') }} - Connect Representative</title>
+    <title>{{ config('app.name', 'Constituency Voice') }} - @translate('Connect Representative')</title>
 
-    <!-- TailWind & Alpine JS -->
+    <!-- Tailwind & Alpine JS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
 </head>
 <body class="bg-slate-900 text-white font-sans min-h-screen flex flex-col justify-between">
 
-    <!-- Header -->
-    <header class="p-6 text-center border-b border-slate-800 backdrop-blur-md bg-slate-900/50 sticky top-0 z-50">
-        <h1 class="text-2xl font-bold text-emerald-400 tracking-wide">Constituency Connect</h1>
+    <!-- Header & Language Switcher -->
+    <header class="p-4 px-6 border-b border-slate-800 backdrop-blur-md bg-slate-900/50 sticky top-0 z-50 items-center justify-between">
+        <h1 class="text-2xl font-bold text-emerald-400 tracking-wide text-center">
+        @translate('Constituency Development Platform')
+        </h1><br>
+        <hr><br>
+        <p class="text-center text-sm text-slate-300">@translate('Share your voice and get heard. Connect via Telegram or WhatsApp to send your development requests.')</p>
+        <br>
+        <!-- Language Selector Form -->
+        <form action="{{ route('language.switch') }}" method="POST" class="flex items-center justify-center gap-2">
+            @csrf
+            <label for="language-select" class="sr-only">@translate('Select Language')</label>
+            <select id="language-select" 
+                    name="language" 
+                    onchange="this.form.submit()" 
+                    class="bg-slate-800 text-slate-200 border border-slate-700 text-xs rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
+                <option value="en" {{ session('app_locale', 'en') == 'en' ? 'selected' : '' }}>English</option>
+                <option value="sw" {{ session('app_locale') == 'sw' ? 'selected' : '' }}>Kiswahili</option>
+                <option value="sheng" {{ session('app_locale') == 'sheng' ? 'selected' : '' }}>Sheng</option>
+                <option value="kikuyu" {{ session('app_locale') == 'kikuyu' ? 'selected' : '' }}>Gĩkũyũ</option>
+                <option value="luo" {{ session('app_locale') == 'luo' ? 'selected' : '' }}>Dholuo</option>
+                <option value="luhya" {{ session('app_locale') == 'luhya' ? 'selected' : '' }}>Luhya</option>
+                <option value="kalenjin" {{ session('app_locale') == 'kalenjin' ? 'selected' : '' }}>Kalenjin</option>
+                <option value="kamba" {{ session('app_locale') == 'kamba' ? 'selected' : '' }}>Kikamba</option>
+            </select>
+        </form>
     </header>
 
     <!-- Main Container -->
@@ -25,7 +47,9 @@
         
         <!-- MP Display Card -->
         <div id="mp-card" class="bg-slate-800/80 rounded-2xl p-6 border border-slate-700 shadow-2xl animate__animated animate__fadeInLeft">
-            <h3 id="card-header-title" class="text-lg font-bold text-emerald-400 mb-4 border-b border-slate-700 pb-2">Your Elected Representative</h3>
+            <h3 id="card-header-title" class="text-lg font-bold text-emerald-400 mb-4 border-b border-slate-700 pb-2">
+                @translate('Your Elected Representative')
+            </h3>
             
             <!-- Default / Loading State -->
             <div id="mp-container" class="space-y-4">
@@ -34,10 +58,10 @@
                          src="{{ asset('images/default-avatar.png') }}" 
                          onerror="this.onerror=null;this.src='{{ asset('images/default-avatar.png') }}';"
                          class="w-20 h-20 rounded-full object-cover border-2 border-emerald-500 shadow-md" 
-                         alt="MP Photo">
+                         alt="@translate('MP Photo')">
                     <div>
-                        <h4 id="mp-name" class="text-lg font-bold text-white">Detecting location...</h4>
-                        <p id="mp-constituency" class="text-sm text-slate-400">Locating constituency...</p>
+                        <h4 id="mp-name" class="text-lg font-bold text-white">@translate('Detecting location...')</h4>
+                        <p id="mp-constituency" class="text-sm text-slate-400">@translate('Locating constituency...')</p>
                         <p id="mp-email" class="text-xs text-sky-400 mt-1"></p>
                     </div>
                 </div>
@@ -47,31 +71,42 @@
             <div id="candidates-list" class="hidden space-y-3 mt-4"></div>
         </div>
 
-        <!-- Telegram / Action Card -->
+        <!-- Social Platform Action Card -->
         <div x-data="locationLinker()" class="bg-slate-800/80 rounded-2xl p-6 border border-slate-700 shadow-2xl animate__animated animate__fadeInRight">
-            <h3 class="text-lg font-bold text-emerald-400 mb-2">Connect & Submit Requests</h3>
-            <p class="text-slate-300 text-sm mb-6">Send community development issues directly to your representative via Telegram.</p>
+            <h3 class="text-lg font-bold text-emerald-400 mb-2">@translate('Connect & Submit Requests')</h3>
+            <p class="text-slate-300 text-sm mb-6">@translate('Send community development issues directly to your representative via Telegram or WhatsApp.')</p>
 
             <template x-if="!locationCaptured">
                 <button @click="captureLocation()" 
                         :disabled="loading"
                         class="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 font-bold py-3 px-4 rounded-xl transition duration-300 shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
-                    <span x-text="loading ? 'Detecting Location...' : 'Verify Location & Continue'"></span>
+                    <span x-text="loading ? '{{ app(\App\Services\Gemma4Service::class)->translateContent('Detecting Location...', app()->getLocale()) }}' : '{{ app(\App\Services\Gemma4Service::class)->translateContent('Verify Location & Continue', app()->getLocale()) }}'"></span>
                 </button>
             </template>
 
             <template x-if="locationCaptured">
                 <div class="space-y-4 animate__animated animate__fadeIn">
                     <div class="p-3 bg-emerald-950/50 border border-emerald-800/50 text-emerald-400 rounded-xl text-xs flex items-center gap-2">
-                        ✓ Location verified: Priority tagging active.
+                        ✓ @translate('Location verified: Priority tagging active.')
                     </div>
+                    
+                    <!-- Telegram Button -->
                     <a href="{{ config('services.telegram.bot_url', 'https://t.me/constituency_development_bot') }}" 
                        target="_blank" 
                        rel="noopener noreferrer"
                        class="w-full inline-flex items-center justify-center gap-3 bg-sky-500 hover:bg-sky-600 text-white font-bold px-6 py-4 rounded-2xl shadow-lg transition">
                         <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12s5.37 12 12 12 12-5.37 12-12S18.63 0 12 0zm5.56 8.16l-2.02 9.53c-.15.68-.55.84-1.12.52l-3.1-2.28-1.5 1.44c-.17.17-.31.31-.63.31l.22-3.17 5.77-5.21c.25-.22-.05-.35-.39-.12l-7.14 4.5-3.07-.96c-.67-.21-.68-.67.14-.99l12.01-4.63c.56-.2 1.05.14.83.96z"/></svg>
-                        Submit Request via Telegram
+                        @translate('Submit via Telegram')
+                    </a>
+
+                    <!-- WhatsApp Button -->
+                    <a href="https://wa.me/{{ config('services.whatsapp.display_number') }}?text=Hello%2C%20I%20would%20like%20to%20submit%20a%20constituency%20development%20request." 
+                       target="_blank" 
+                       rel="noopener noreferrer"
+                       class="w-full inline-flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-4 rounded-2xl shadow-lg transition">
+                        <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654z"/></svg>
+                        @translate('Submit via WhatsApp')
                     </a>
                 </div>
             </template>
@@ -80,11 +115,23 @@
     </main>
 
     <footer class="p-4 text-center text-xs text-slate-500">
-        Powered by Civic Tech Platform &copy; {{ date('Y') }}
+        @translate('Powered by Civic Tech Platform') &copy; {{ date('Y') }}
     </footer>
 
     <script>
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+        const translations = {
+            electedRep: @json(app(\App\Services\Gemma4Service::class)->translateContent('Your Elected Representative', app()->getLocale())),
+            nearbyReps: @json(app(\App\Services\Gemma4Service::class)->translateContent('Nearby Representatives', app()->getLocale())),
+            honorableRep: @json(app(\App\Services\Gemma4Service::class)->translateContent('Honorable Representative', app()->getLocale())),
+            constituencyLabel: @json(app(\App\Services\Gemma4Service::class)->translateContent('Constituency', app()->getLocale())),
+            localRegion: @json(app(\App\Services\Gemma4Service::class)->translateContent('Local Region', app()->getLocale())),
+            noActiveMp: @json(app(\App\Services\Gemma4Service::class)->translateContent('No active MP assigned to this constituency yet.', app()->getLocale())),
+            notice: @json(app(\App\Services\Gemma4Service::class)->translateContent('Notice', app()->getLocale())),
+            defaultError: @json(app(\App\Services\Gemma4Service::class)->translateContent('Could not match location to a constituency.', app()->getLocale())),
+            loadError: @json(app(\App\Services\Gemma4Service::class)->translateContent('Unable to load location details.', app()->getLocale()))
+        };
 
         function locationLinker() {
             return {
@@ -112,7 +159,6 @@
             }
         }
 
-        // Auto-detect on load
         document.addEventListener("DOMContentLoaded", function () {
             if ("geolocation" in navigator) {
                 navigator.geolocation.getCurrentPosition(
@@ -143,34 +189,34 @@
                 } else if (data.status === "multiple_candidates_found") {
                     displayMultipleMps(data.possible_mps, data.message);
                 } else {
-                    showError(data.message || "Could not match location to a constituency.");
+                    showError(data.message || translations.defaultError);
                 }
             } catch (err) {
                 console.error("Error fetching MP details:", err);
-                showError("Unable to load location details.");
+                showError(translations.loadError);
             }
         }
 
         function displaySingleMp(mp, constituency) {
-            document.getElementById("card-header-title").innerText = "Your Elected Representative";
+            document.getElementById("card-header-title").innerText = translations.electedRep;
             document.getElementById("mp-container").classList.remove("hidden");
             document.getElementById("candidates-list").classList.add("hidden");
 
             const defaultAvatar = "{{ asset('images/default-avatar.png') }}";
 
             if (mp) {
-                document.getElementById("mp-name").innerText = mp.mp_name || 'Honorable Representative';
-                document.getElementById("mp-constituency").innerText = "Constituency: " + (constituency?.name || 'Local Region');
+                document.getElementById("mp-name").innerText = mp.mp_name || translations.honorableRep;
+                document.getElementById("mp-constituency").innerText = translations.constituencyLabel + ": " + (constituency?.name || translations.localRegion);
                 document.getElementById("mp-email").innerText = mp.email || '';
                 document.getElementById("mp-avatar").src = mp.avatar_path ? mp.avatar_path : defaultAvatar;
             } else {
-                document.getElementById("mp-name").innerText = (constituency?.name || 'Local') + " Area";
-                document.getElementById("mp-constituency").innerText = "No active MP assigned to this constituency yet.";
+                document.getElementById("mp-name").innerText = (constituency?.name || translations.localRegion);
+                document.getElementById("mp-constituency").innerText = translations.noActiveMp;
             }
         }
 
         function displayMultipleMps(mps, message) {
-            document.getElementById("card-header-title").innerText = "Nearby Representatives";
+            document.getElementById("card-header-title").innerText = translations.nearbyReps;
             document.getElementById("mp-container").classList.add("hidden");
             
             const listContainer = document.getElementById("candidates-list");
@@ -198,7 +244,7 @@
         }
 
         function showError(msg) {
-            document.getElementById("mp-name").innerText = "Notice";
+            document.getElementById("mp-name").innerText = translations.notice;
             document.getElementById("mp-constituency").innerText = msg;
         }
     </script>

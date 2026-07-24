@@ -137,7 +137,7 @@ Generate the JWT_SECRET key in your .env file:
 
 ```
 
-Update the following variables inside `.env`:
+Update the following variables inside `.env` if they are not present:
 ```env
    
     APP_NAME="Constituency Development Platform"                                                        
@@ -152,7 +152,7 @@ Update the following variables inside `.env`:
     TELEGRAM_BOT_TOKEN=123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ
     TELEGRAM_WEBHOOK_URL=https://your_domain.ngrok-free.app/api/telegram/webhook
 ```
-
+**Other required APIs are available in the .env.example**
 
 
 4. **Generate Application Key & Run Migrations**
