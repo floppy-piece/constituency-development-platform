@@ -1,0 +1,385 @@
+<?php
+
+namespace App\Services;
+
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Throwable;
+
+class Gemma4Service
+{
+    protected string $apiKey;
+    protected string $endpoint;
+    protected string $model;
+
+    public function __construct()
+    {
+        $this->apiKey = config('services.gemma.api_key', '');
+        $this->model = config('services.gemma.model', 'gemma-4-26b-a4b-it');
+
+        $this->endpoint = config(
+            'services.gemma.endpoint',
+            'https://generativelanguage.googleapis.com/v1beta/models'
+        );
+    }
+
+    /**
+     * Process constituent request data including text and optional media attachments
+     * (Images, Audio, Video, or PDFs).
+     */
+    public function processRequestData(
+        ?string $text,
+        ?string $filePath,
+        string $fileType = '',
+        bool $isInConstituency = true,
+        $recentRequests = []
+    ): array {
+        if (empty($this->apiKey)) {
+            Log::error('Gemma 4 API Key is missing from config.');
+            return $this->fallbackResponse($text);
+        }
+
+        // Format recent requests safely
+        $existingRequestsText = collect($recentRequests)->map(function ($req) {
+            $summary = $req->content ?? $req->raw_message ?? 'No text';
+            $id = $req->request_id ?? $req->getKey();
+
+            return "ID: {$id} | Summary: {$summary}";
+        })->implode("\n");
+
+        if (empty($existingRequestsText)) {
+            $existingRequestsText = 'None';
+        }
+
+        // System Prompt instructing Gemma 4 on text, audio, video, image, and document analysis
+        $systemPrompt = "You are a JSON generator and constituency AI advisor for Kenya.\n"
+            . "Task Instructions:\n"
+            . "1. Translate Swahili/Sheng/informal text to clear, professional English.\n"
+            . "2. IF A MEDIA ATTACHMENT IS PRESENT (Image, Audio, Video, or PDF Document):\n"
+            . "   - Carefully inspect/analyze the visual or audio content.\n"
+            . "   - Determine what physical infrastructure issue or public problem is shown or described (e.g., road potholes, water bursts, broken school facilities, damaged bridges).\n"
+            . "3. Include relevant findings directly in `translated_summary` (e.g. 'Citizen reports water pipe leak. Attached photo shows major burst flooding a road near a school.').\n"
+            . "4. Rate urgency strictly as 'low', 'medium', or 'high' based on combined text and media severity.\n"
+            . "5. Compare the submission to existing requests. If it matches an existing issue, return that integer ID in 'matched_request_id'. Otherwise return null.\n\n"
+            . "EXISTING REQUESTS:\n"
+            . "{$existingRequestsText}";
+
+        $userContent = "User Submission: " . ($text ?: "No text provided (Attachment provided).");
+
+        // 1. Build initial text part
+        $parts = [
+            ['text' => $userContent],
+        ];
+
+        // 2. Attach Multimodal File (Image, Video, Audio, or PDF) if valid path exists
+        if ($filePath && file_exists($filePath)) {
+            $mimeType = mime_content_type($filePath) ?: 'application/octet-stream';
+
+            if ($this->isSupportedMimeType($mimeType)) {
+                $base64Data = base64_encode(file_get_contents($filePath));
+
+                $parts[] = [
+                    'inline_data' => [
+                        'mime_type' => $mimeType,
+                        'data'      => $base64Data,
+                    ],
+                ];
+
+                Log::info("Gemma 4: Attached image payload ({$mimeType}) for analysis.");
+            } else {
+                Log::warning("Gemma 4: Unsupported attachment MIME type '{$mimeType}'. Proceeding with text only.");
+            }
+        }
+
+        $url = rtrim($this->endpoint, '/') . "/{$this->model}:generateContent?key={$this->apiKey}";
+
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+            ])->post($url, [
+                'system_instruction' => [
+                    'parts' => [
+                        ['text' => $systemPrompt],
+                    ],
+                ],
+                'contents' => [
+                    [
+                        'role'  => 'user',
+                        'parts' => $parts,
+                    ],
+                ],
+                'generationConfig' => [
+                    'response_mime_type' => 'application/json',
+                    'response_schema'    => [
+                        'type' => 'OBJECT',
+                        'properties' => [
+                            'translated_summary' => ['type' => 'STRING'],
+                            'urgency'            => [
+                                'type' => 'STRING',
+                                'enum' => ['low', 'medium', 'high']
+                            ],
+                            'matched_request_id' => [
+                                'type'     => 'INTEGER',
+                                'nullable' => true,
+                            ],
+                        ],
+                        'required' => ['translated_summary', 'urgency'],
+                    ],
+                    'temperature' => 0.1,
+                ],
+            ]);
+
+            if (! $response->successful()) {
+                Log::error("Gemma 4 API HTTP Error ({$response->status()}): " . $response->body());
+                return $this->fallbackResponse($text);
+            }
+
+            $responseData = $response->json();
+            $rawContent = $responseData['candidates'][0]['content']['parts'][0]['text'] ?? null;
+
+            Log::info('Gemma 4 Vision API Success - AI Response Generated', [
+                'raw_content'           => $rawContent,
+                'full_response_payload' => $responseData,
+            ]);
+
+            if (! $rawContent) {
+                return $this->fallbackResponse($text);
+            }
+
+            $parsed = $this->extractJson($rawContent);
+
+            if (! is_array($parsed)) {
+                Log::error('Failed to parse Gemma 4 JSON output', ['raw' => $rawContent]);
+                return $this->fallbackResponse($text);
+            }
+
+            return [
+                'translated_summary' => $parsed['translated_summary'] ?? $text ?? 'Issue reported by citizen with image.',
+                'urgency'            => strtolower($parsed['urgency'] ?? 'low'),
+                'matched_request_id' => is_numeric($parsed['matched_request_id'] ?? null)
+                    ? (int) $parsed['matched_request_id']
+                    : null,
+            ];
+
+        } catch (Throwable $e) {
+            Log::error('Gemma 4 Exception: ' . $e->getMessage());
+            return $this->fallbackResponse($text);
+        }
+    }
+
+    /**
+     * Use Gemma 4 as the AI decision-making engine to evaluate and prioritize competing proposals.
+     */
+    public function evaluateAndCompareProposals(array $proposalA, array $proposalB): array
+    {
+        if (empty($this->apiKey)) {
+            return [
+                'recommended_winner' => ($proposalA['citizen_reports'] ?? 0) >= ($proposalB['citizen_reports'] ?? 0) ? 'proposal_a' : 'proposal_b',
+                'score_proposal_a'   => 50,
+                'score_proposal_b'   => 50,
+                'ai_reasoning'       => 'Fallback evaluation: Evaluated based strictly on raw citizen report volume due to missing API key.',
+                'trade_off_analysis' => 'API Unavailable.',
+                'confidence_score'   => 50,
+            ];
+        }
+
+        $systemPrompt = "You are an expert AI Public Sector Planning & Infrastructure Policy Advisor for Kenya.\n"
+            . "Your task is to analyze two competing constituent proposal requests submitted to a Member of Parliament (MP).\n"
+            . "You must evaluate both proposals based on:\n"
+            . "1. Citizen Demand (Volume of complaints/requests & urgency level).\n"
+            . "2. Physical Infrastructure Deficit (Enrollment vs Capacity overcrowding, travel distance for citizens).\n"
+            . "3. Demographic Vulnerability & Poverty Index (Socio-economic impact).\n"
+            . "4. Alignment with County Integrated Development Plans (CIDP) & official public datasets.";
+
+        $payload = [
+            'proposal_a' => $proposalA,
+            'proposal_b' => $proposalB,
+        ];
+
+        $url = rtrim($this->endpoint, '/') . "/{$this->model}:generateContent?key={$this->apiKey}";
+
+        try {
+            $response = Http::withHeaders(['Content-Type' => 'application/json'])
+                ->post($url, [
+                    'system_instruction' => [
+                        'parts' => [['text' => $systemPrompt]],
+                    ],
+                    'contents' => [
+                        ['role' => 'user', 'parts' => [['text' => json_encode($payload)]]],
+                    ],
+                    'generationConfig' => [
+                        'response_mime_type' => 'application/json',
+                        'response_schema'    => [
+                            'type' => 'OBJECT',
+                            'properties' => [
+                                'recommended_winner' => [
+                                    'type' => 'STRING',
+                                    'enum' => ['proposal_a', 'proposal_b']
+                                ],
+                                'score_proposal_a'   => ['type' => 'INTEGER'],
+                                'score_proposal_b'   => ['type' => 'INTEGER'],
+                                'ai_reasoning'       => ['type' => 'STRING'],
+                                'trade_off_analysis' => ['type' => 'STRING'],
+                                'confidence_score'   => ['type' => 'INTEGER'],
+                            ],
+                            'required' => ['recommended_winner', 'score_proposal_a', 'score_proposal_b', 'ai_reasoning', 'trade_off_analysis', 'confidence_score'],
+                        ],
+                        'temperature' => 0.1,
+                    ],
+                ]);
+
+            if ($response->successful()) {
+                $rawText = $response->json('candidates.0.content.parts.0.text') ?? '{}';
+                $parsed = $this->extractJson($rawText);
+
+                if (is_array($parsed)) {
+                    return [
+                        'recommended_winner' => $parsed['recommended_winner'] ?? 'proposal_a',
+                        'score_proposal_a'   => (int) ($parsed['score_proposal_a'] ?? 50),
+                        'score_proposal_b'   => (int) ($parsed['score_proposal_b'] ?? 50),
+                        'ai_reasoning'       => $parsed['ai_reasoning'] ?? 'Decision evaluated by Gemma 4.',
+                        'trade_off_analysis' => $parsed['trade_off_analysis'] ?? 'N/A',
+                        'confidence_score'   => (int) ($parsed['confidence_score'] ?? 80),
+                    ];
+                }
+            } else {
+                Log::error("Gemma 4 Proposal Comparison Error ({$response->status()}): " . $response->body());
+            }
+        } catch (Throwable $e) {
+            Log::error("Gemma 4 Proposal Comparison Exception: {$e->getMessage()}");
+        }
+
+        return [
+            'recommended_winner' => 'proposal_a',
+            'score_proposal_a'   => 50,
+            'score_proposal_b'   => 50,
+            'ai_reasoning'       => 'Error contacting Gemma 4 decision engine.',
+            'trade_off_analysis' => 'N/A',
+            'confidence_score'   => 0,
+        ];
+    }
+
+    /**
+     * Translate view text/content to a specific Kenyan local language using Gemma 4.
+     */
+    public function translateContent(string|array $content, string $targetLanguage): string|array
+    {
+        if (empty($this->apiKey) || $targetLanguage === 'en') {
+            return $content;
+        }
+
+        $isInputArray = is_array($content);
+        $textToTranslate = $isInputArray ? json_encode($content) : $content;
+
+        $systemPrompt = "You are an expert translator specializing in Kenyan languages and dialects (including Swahili, Sheng, Kikuyu, Luo, Luhya, Kalenjin, etc.).\n"
+            . "Translate the following user-facing application UI content into: {$targetLanguage}.\n"
+            . "Rules:\n"
+            . "1. Preserve HTML tags, variables (e.g. :name, {id}), and dynamic placeholders exactly as they are.\n"
+            . "2. Maintain natural, culturally appropriate, and clear local terminology.\n"
+            . "3. Output ONLY the raw translated text (or original JSON structure if input is JSON) without any commentary or markdown wrappers.";
+
+        $url = rtrim($this->endpoint, '/') . "/{$this->model}:generateContent?key={$this->apiKey}";
+
+        try {
+            $response = Http::withHeaders(['Content-Type' => 'application/json'])
+                ->post($url, [
+                    'system_instruction' => [
+                        'parts' => [['text' => $systemPrompt]],
+                    ],
+                    'contents' => [
+                        ['role' => 'user', 'parts' => [['text' => $textToTranslate]]],
+                    ],
+                    'generationConfig' => [
+                        'temperature' => 0.1,
+                    ],
+                ]);
+
+            if ($response->successful()) {
+                $translatedText = $response->json('candidates.0.content.parts.0.text') ?? $textToTranslate;
+
+                Log::info("Gemma 4 Web Content Translation Success [{$targetLanguage}]", [
+                    'original'   => $textToTranslate,
+                    'translated' => $translatedText,
+                ]);
+
+                return $isInputArray ? (json_decode($translatedText, true) ?? $content) : trim($translatedText);
+            }
+        } catch (Throwable $e) {
+            Log::error("Gemma 4 Translation Error: {$e->getMessage()}");
+        }
+
+        return $content;
+    }
+
+    /**
+     * Check if the attachment MIME type is supported by Gemini models inline payload.
+     */
+    private function isSupportedMimeType(string $mimeType): bool
+    {
+        return str_starts_with($mimeType, 'image/')
+            || str_starts_with($mimeType, 'audio/')
+            || str_starts_with($mimeType, 'video/')
+            || $mimeType === 'application/pdf'
+            || $mimeType === 'text/plain';
+    }
+
+    /**
+     * Robust extraction method handling valid JSON, markdown codeblocks,
+     * and fallback regex parsing for pseudo-JSON bullet outputs.
+     */
+    private function extractJson(string $text): ?array
+    {
+        // 1. Direct JSON parse
+        $direct = json_decode($text, true);
+        if (is_array($direct)) {
+            return $direct;
+        }
+
+        // 2. Clean out code fences
+        $cleaned = preg_replace('/```(?:json)?\s*([\s\S]*?)\s*```/', '$1', $text);
+        $cleanedResult = json_decode(trim($cleaned), true);
+        if (is_array($cleanedResult)) {
+            return $cleanedResult;
+        }
+
+        // 3. Locate valid JSON braces {...} inside raw text
+        if (preg_match_all('/\{[\s\S]*?\}/', $text, $matches)) {
+            foreach (array_reverse($matches[0]) as $jsonCandidate) {
+                $decoded = json_decode($jsonCandidate, true);
+                if (is_array($decoded) && (isset($decoded['translated_summary']) || isset($decoded['recommended_winner']))) {
+                    return $decoded;
+                }
+            }
+        }
+
+        // 4. Fallback parser: Extract key-value pairs formatted as bullet points (* `key`: "value")
+        $extracted = [];
+
+        if (preg_match('/translated_summary[`\s]*:[\s]*"([^"]+)"/i', $text, $matchSummary)) {
+            $extracted['translated_summary'] = $matchSummary[1];
+        }
+
+        if (preg_match('/urgency[`\s]*:[\s]*"?(low|medium|high)"?/i', $text, $matchUrgency)) {
+            $extracted['urgency'] = strtolower($matchUrgency[1]);
+        }
+
+        if (preg_match('/matched_request_id[`\s]*:[\s]*(null|\d+)/i', $text, $matchId)) {
+            $extracted['matched_request_id'] = $matchId[1] === 'null' ? null : (int) $matchId[1];
+        }
+
+        if (! empty($extracted) && isset($extracted['translated_summary'])) {
+            return $extracted;
+        }
+
+        return null;
+    }
+
+    private function fallbackResponse(?string $text): array
+    {
+        return [
+            'translated_summary' => $text ?: 'Issue reported by citizen.',
+            'urgency'            => 'low',
+            'matched_request_id' => null,
+        ];
+    }
+}
