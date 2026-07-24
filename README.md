@@ -59,6 +59,7 @@ Powered by **Google’s Gemma 4 LLM**, the system automatically transcribes, cat
 
 
 ## 🛠️ Tech Stack
+```
  ___________________________________________________________________________________________
 | Component             | Technology                                                        |
 |_______________________|___________________________________________________________________|
@@ -69,7 +70,7 @@ Powered by **Google’s Gemma 4 LLM**, the system automatically transcribes, cat
 | **Messaging Channel** | Telegram Bot API (Webhook Mode)                                   |
 | **Database**          | SQLite (Development) / PostgreSQL / MySQL (Production)            |
 |_______________________|___________________________________________________________________|
-
+```
 
 
 ## 🚀 Getting Started
@@ -86,56 +87,59 @@ Powered by **Google’s Gemma 4 LLM**, the system automatically transcribes, cat
 ### 📥 Installation
 
 1. **Clone the Repository**
-bash
-   ________________________________________________________________________________
+```bash
+   
    git clone https://github.com/floppy-piece/constituency-development-platform.git
    cd constituency-development-platform
-   _________________________________________________________________________________
+```
     
 
 2. **Install PHP & Node Dependencies**
-bash
-    _____________________________
+```bash
     composer install
     npm install && npm run build
-    _____________________________
+```
 
 
 3. **Environment Configuration**
 Copy the `.env.example` file to `.env`:
-bash
-    _____________________
+```bash
+    
     cp .env.example .env
-    _____________________
+
+```
 
 
 **🔑 Authentication Setup (JWT)**
 
 This project uses php-open-source-saver/jwt-auth (or tymon/jwt-auth) to handle stateless API authentication for Member Parliament (MP) users.
  Install the JWT Package
-Bash
-    ________________________________________________
+```Bash
+    
     composer require php-open-source-saver/jwt-auth
-    ________________________________________________
+
+```
 
  Publish Configuration File
-Bash
-    ____________________________________________________________________________________________________
+```Bash
+
     php artisan vendor:publish --provider="PHPOpenSourceSaver\JWTAuth\Providers\LaravelServiceProvider"
-    ____________________________________________________________________________________________________
+
+```
 
 Generate JWT Secret Key
 
 Generate the JWT_SECRET key in your .env file:  
 
-Bash
-    _______________________
+```Bash
+
     php artisan jwt:secret 
-    _______________________
+
+```
 
 Update the following variables inside `.env`:
-env
-    ____________________________________________________________________________________________________
+```env
+   
     APP_NAME="Constituency Development Platform"                                                        
     APP_URL=http://localhost:8000                                                                       
     
@@ -147,38 +151,38 @@ env
     # Telegram Bot Configuration
     TELEGRAM_BOT_TOKEN=123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ
     TELEGRAM_WEBHOOK_URL=https://your_domain.ngrok-free.app/api/telegram/webhook
-    ______________________________________________________________________________________________________
+```
 
 
 
 4. **Generate Application Key & Run Migrations**
-bash
-    ___________________________
+```bash
+
     php artisan key:generate
     php artisan migrate --seed
-    ___________________________
+
+```
 
 
 5. **Register Telegram Webhook**
 Run the artisan command or execute a CURL request:
-bash
-    ______________________________________________________________________________
+```bash
+
     curl -X POST "https://api.telegram.org/bot<telegram_bot_token>/setWebhook" \ 
      -H "Content-Type: application/json" \
      -d '{
            "url": "https://<your_domain.ngrok-free.app>/api/telegram/webhook",
            "secret_token": "<your_secret_key>"
          }'
-    _______________________________________________________________________________
-
+```
 
 
 6. **Start the Local Server**
-bash
-    _________________
-    php artisan serve
-    _________________
+```bash
 
+    php artisan serve
+
+```
 
 
 ## 🤖 Gemma 4 Integration Details
@@ -200,20 +204,20 @@ json
 ## 🧪 Testing the Webhook Locally
 
 1. Start `ngrok` to expose your local web server:
-bash
-    ________________
-    ngrok http 8000
-    ________________
+```bash
 
+    ngrok http 8000
+
+```
 
 2. Update `TELEGRAM_WEBHOOK_URL` in `.env` with your HTTPS ngrok URL.
 3. Send a message or voice note to your Telegram Bot.
 4. Check the logs in real time:
-bash
-    ________________________________
+```bash
+    
     tail -f storage/logs/laravel.log
-    ________________________________
-
+    
+```
 
 ## 👥 Authors & Acknowledgments
 
