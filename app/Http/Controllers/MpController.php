@@ -6,6 +6,7 @@ use App\Models\ConstituencyRequest as ConstituentRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use App\Services\ProposalScoringService;
 use App\Models\ConstituencyFacility;
 
@@ -238,10 +239,20 @@ class MpController extends Controller
 
     public function getAnalyticsData(Request $request)
     {
-        $mp = auth('mp_api')->user();
+        /** @var \App\Models\Mp|null $mp */
+        $mp = Auth::guard('mp_api')->user();
+
+        if (! $mp) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthenticated.',
+            ], 401);
+        }
+
+        $mpId = $mp->mp_id ?? $mp->id;
 
         // Query requests scoped to the authenticated MP
-        $baseQuery = ConstituencyRequest::where('mp_id', $mp->mp_id);
+        $baseQuery = ConstituentRequest::where('mp_id', $mpId);
 
         $totalRequests = (clone $baseQuery)->count();
         $resolvedCount = (clone $baseQuery)->where('status', 'resolved')->count();
@@ -252,11 +263,15 @@ class MpController extends Controller
             ->groupBy('category')
             ->pluck('count', 'category');
 
-        // Ward/Location Distribution
+        // Ward/Location Distribution (Fallback if column isn't ready)
+        $wardDistribution = [];
+        
+        /* Uncomment once 'ward_name' column or relationship exists:
         $wardDistribution = (clone $baseQuery)
             ->select('ward_name', DB::raw('count(*) as total_requests'))
             ->groupBy('ward_name')
             ->get();
+        */
 
         return response()->json([
             'status' => 'success',
