@@ -71,41 +71,43 @@
             <div id="candidates-list" class="hidden space-y-3 mt-4"></div>
         </div>
 
-        <!-- Social Platform Action Card -->
         <div x-data="locationLinker()" class="bg-slate-800/80 rounded-2xl p-6 border border-slate-700 shadow-2xl animate__animated animate__fadeInRight">
             <h3 class="text-lg font-bold text-emerald-400 mb-2">@translate('Connect & Submit Requests')</h3>
-            <p class="text-slate-300 text-sm mb-6">@translate('Send community development issues directly to your representative via Telegram or WhatsApp.')</p>
+            <p class="text-slate-300 text-sm mb-6">@translate('Physical location coordinates are required to route your issue to the correct ward representative.')</p>
 
+            <!-- Location Capture Action -->
             <template x-if="!locationCaptured">
-                <button @click="captureLocation()" 
-                        :disabled="loading"
-                        class="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 font-bold py-3 px-4 rounded-xl transition duration-300 shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
-                    <span x-text="loading ? '{{ app(\App\Services\Gemma4Service::class)->translateContent('Detecting Location...', app()->getLocale()) }}' : '{{ app(\App\Services\Gemma4Service::class)->translateContent('Verify Location & Continue', app()->getLocale()) }}'"></span>
-                </button>
+                <div class="space-y-3">
+                    <button @click="captureLocation()" 
+                            :disabled="loading"
+                            class="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 font-bold py-3 px-4 rounded-xl transition duration-300 shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                        <span x-text="loading ? 'Detecting Physical Location...' : 'Share Location & Unlock Submission'"></span>
+                    </button>
+                    <p class="text-xs text-amber-400 text-center" x-show="locationError" x-text="locationError"></p>
+                </div>
             </template>
 
+            <!-- Unlocked State with Coordinates Passed to Bot Links -->
             <template x-if="locationCaptured">
                 <div class="space-y-4 animate__animated animate__fadeIn">
                     <div class="p-3 bg-emerald-950/50 border border-emerald-800/50 text-emerald-400 rounded-xl text-xs flex items-center gap-2">
-                        ✓ @translate('Location verified: Priority tagging active.')
+                        ✓ Location locked: Latitude <span x-text="lat.toFixed(4)"></span>, Longitude <span x-text="lng.toFixed(4)"></span>
                     </div>
                     
-                    <!-- Telegram Button -->
-                    <a href="{{ config('services.telegram.bot_url', 'https://t.me/constituency_development_bot') }}" 
-                       target="_blank" 
-                       rel="noopener noreferrer"
-                       class="w-full inline-flex items-center justify-center gap-3 bg-sky-500 hover:bg-sky-600 text-white font-bold px-6 py-4 rounded-2xl shadow-lg transition">
-                        <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12s5.37 12 12 12 12-5.37 12-12S18.63 0 12 0zm5.56 8.16l-2.02 9.53c-.15.68-.55.84-1.12.52l-3.1-2.28-1.5 1.44c-.17.17-.31.31-.63.31l.22-3.17 5.77-5.21c.25-.22-.05-.35-.39-.12l-7.14 4.5-3.07-.96c-.67-.21-.68-.67.14-.99l12.01-4.63c.56-.2 1.05.14.83.96z"/></svg>
+                    <!-- Telegram Button passing coordinates token via start deep-link parameter -->
+                    <a :href="telegramUrl" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    class="w-full inline-flex items-center justify-center gap-3 bg-sky-500 hover:bg-sky-600 text-white font-bold px-6 py-4 rounded-2xl shadow-lg transition">
                         @translate('Submit via Telegram')
                     </a>
 
-                    <!-- WhatsApp Button -->
-                    <a href="https://wa.me/{{ config('services.whatsapp.display_number') }}?text=Hello%2C%20I%20would%20like%20to%20submit%20a%20constituency%20development%20request." 
-                       target="_blank" 
-                       rel="noopener noreferrer"
-                       class="w-full inline-flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-4 rounded-2xl shadow-lg transition">
-                        <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654z"/></svg>
+                    <!-- WhatsApp Button passing coordinates in pre-filled message -->
+                    <a :href="whatsappUrl" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    class="w-full inline-flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-4 rounded-2xl shadow-lg transition">
                         @translate('Submit via WhatsApp')
                     </a>
                 </div>
@@ -137,23 +139,60 @@
             return {
                 locationCaptured: false,
                 loading: false,
+                lat: null,
+                lng: null,
+                locationError: '',
+                telegramUrl: "{{ config('services.telegram.bot_url', 'https://t.me/constituency_development_bot') }}",
+                whatsappUrl: "https://wa.me/{{ config('services.whatsapp.display_number') }}?text=Hello,%20I%20would%20like%20to%20submit%20a%20constituency%20request.",
+
                 captureLocation() {
                     this.loading = true;
+                    this.locationError = '';
+                    
                     if (navigator.geolocation) {
                         navigator.geolocation.getCurrentPosition(
-                            (pos) => {
+                            async (pos) => {
+                                this.lat = pos.coords.latitude;
+                                this.lng = pos.coords.longitude;
+                                
+                                try {
+                                    // Request temporary coordinate token for Telegram deep-linking
+                                    let response = await fetch('/api/telegram-location-token', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'X-CSRF-TOKEN': csrfToken
+                                        },
+                                        body: JSON.stringify({ latitude: this.lat, longitude: this.lng })
+                                    });
+                                    let data = await response.json();
+                                    
+                                    if (data.status === 'success') {
+                                        let baseUrl = "{{ config('services.telegram.bot_url', 'https://t.me/constituency_development_bot') }}";
+                                        this.telegramUrl = `${baseUrl}?start=${data.start_payload}`;
+                                    }
+                                } catch (e) {
+                                    console.error('Failed to bind location token for Telegram', e);
+                                }
+
+                                // Format WhatsApp pre-filled query string
+                                this.whatsappUrl = `https://wa.me/{{ config('services.whatsapp.display_number') }}?text=` + encodeURIComponent(`Hello, my coordinates are Lat: ${this.lat}, Lng: ${this.lng}. Here is my request: `);
+
                                 this.locationCaptured = true;
                                 this.loading = false;
-                                fetchMpDetails(pos.coords.latitude, pos.coords.longitude);
+                                
+                                // Fetch MP details for UI display card
+                                fetchMpDetails(this.lat, this.lng);
                             }, 
-                            () => {
+                            (err) => {
                                 this.loading = false;
-                                fetchMpDetails(null, null);
-                            }
+                                this.locationError = 'Location access is strictly required to map your ward. Please enable GPS permissions.';
+                            },
+                            { enableHighAccuracy: true, timeout: 10000 }
                         );
                     } else {
                         this.loading = false;
-                        fetchMpDetails(null, null);
+                        this.locationError = 'Geolocation is not supported by your browser.';
                     }
                 }
             }

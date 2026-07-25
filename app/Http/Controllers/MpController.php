@@ -263,24 +263,22 @@ class MpController extends Controller
             ->groupBy('category')
             ->pluck('count', 'category');
 
-        // Ward/Location Distribution (Fallback if column isn't ready)
-        $wardDistribution = [];
-        
-        /* Uncomment once 'ward_name' column or relationship exists:
+        // Ward Distribution (Now utilizing the relationship)
         $wardDistribution = (clone $baseQuery)
-            ->select('ward_name', DB::raw('count(*) as total_requests'))
-            ->groupBy('ward_name')
-            ->get();
-        */
+        ->join('wards', 'requests.ward_id', '=', 'wards.ward_id')
+        ->select('wards.name as ward_name', DB::raw('count(requests.request_id) as total_requests'))
+        ->groupBy('wards.name')
+        ->get();
 
         return response()->json([
-            'status' => 'success',
-            'data' => [
-                'total_requests' => $totalRequests,
-                'resolved_requests' => $resolvedCount,
-                'categories' => $categories,
-                'ward_distribution' => $wardDistribution,
-            ]
+        'status' => 'success',
+        'data' => [
+            'total_requests' => $totalRequests,
+            'resolved_requests' => $resolvedCount,
+            'categories' => $categories,
+            'ward_distribution' => $wardDistribution,
+        ]
         ]);
+
     }
 }

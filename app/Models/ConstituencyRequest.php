@@ -16,6 +16,7 @@ class ConstituencyRequest extends Model
     protected $fillable = [
         'user_id',
         'mp_id',
+        'ward_id',
         'raw_message',
         'content',
         'upload_file_path',
@@ -48,5 +49,9 @@ class ConstituencyRequest extends Model
     {
         // Adjust 'facility_id' if your foreign key column on constituency_requests uses a different name
         return $this->belongsTo(ConstituencyFacility::class, 'facility_id', 'facility_id');
+    }
+    public function ward()
+    {
+        return $this->belongsTo(Ward::class, 'ward_id', 'ward_id');
     }
 }

@@ -8,6 +8,8 @@ use App\Models\Mp;
 use App\Services\GeocodingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 class CitizenLocationController extends Controller
 {
@@ -16,6 +18,31 @@ class CitizenLocationController extends Controller
     public function __construct(GeocodingService $geocoding)
     {
         $this->geocoding = $geocoding;
+    }
+
+    /**
+     * Generate a secure, temporary cache token linked to the browser's coordinates
+     * for Telegram deep-linking.
+     */
+    public function generateTelegramToken(Request $request): JsonResponse
+    {
+        $request->validate([
+            'latitude' => 'required|numeric|between:-90,90',
+            'longitude' => 'required|numeric|between:-180,180',
+        ]);
+
+        $token = Str::random(40);
+
+        // Store coordinates securely in cache for 15 minutes
+        Cache::put('telegram_loc_' . $token, [
+            'latitude' => $request->input('latitude'),
+            'longitude' => $request->input('longitude')
+        ], now()->addMinutes(15));
+
+        return response()->json([
+            'status' => 'success',
+            'start_payload' => $token
+        ]);
     }
 
     public function detectMp(Request $request): JsonResponse

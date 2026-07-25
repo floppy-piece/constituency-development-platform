@@ -36,10 +36,11 @@ class AnalyticsController extends Controller
             ->groupBy('category')
             ->pluck('total', 'category');
 
-        // 4. Ward Distribution
-        $wards = ConstituentFeedback::select('ward_name', DB::raw('count(*) as total'), 'primary_sector', 'status')
-            ->groupBy('ward_name', 'primary_sector', 'status')
-            ->get();
+       // 4. Ward Distribution
+        $wards = ConstituentFeedback::join('wards', 'requests.ward_id', '=', 'wards.ward_id')
+        ->select('wards.name as ward_name', DB::raw('count(*) as total'))
+        ->groupBy('wards.name')
+        ->get();
 
         return view('mp.analytics', compact(
             'totalFeedback',

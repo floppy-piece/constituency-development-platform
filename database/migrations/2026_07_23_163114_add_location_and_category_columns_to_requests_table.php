@@ -19,11 +19,11 @@ return new class extends Migration
 
             // Add latitude and longitude columns
             if (!Schema::hasColumn('requests', 'latitude')) {
-                $table->decimal('latitude', 10, 8)->nullable()->after('category');
+                $table->decimal('latitude', 10, 8)->nullable(false)->after('category');
             }
 
             if (!Schema::hasColumn('requests', 'longitude')) {
-                $table->decimal('longitude', 11, 8)->nullable()->after('latitude');
+                $table->decimal('longitude', 11, 8)->nullable(false)->after('latitude');
             }
         });
     }

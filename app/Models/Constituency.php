@@ -35,6 +35,7 @@ class Constituency extends Model
         'county_or_region',
         'latitude',
         'longitude',
+        'approximate_size',
     ];
 
     /**
@@ -46,4 +47,9 @@ class Constituency extends Model
         'latitude'  => 'float',
         'longitude' => 'float',
     ];
+
+    public function wards()
+    {
+        return $this->hasMany(Ward::class, 'constituency_id', 'constituency_id');
+    }
 }

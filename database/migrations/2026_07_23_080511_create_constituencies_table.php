@@ -15,10 +15,11 @@ return new class extends Migration
         Schema::create('constituencies', function (Blueprint $table) {
             $table->id('constituency_id');
             $table->string('name')->unique();
+            $table->foreignId('mp_id')->nullable(false)->constrained('mps', 'mp_id')->onDelete('cascade');
             $table->string('code')->nullable();
             $table->string('county_or_region')->nullable();
-            $table->decimal('latitude', 10, 7)->nullable();
-            $table->decimal('longitude', 10, 7)->nullable();
+            $table->decimal('latitude', 10, 8)->nullable(false);
+            $table->decimal('longitude', 11, 8)->nullable(false);
             $table->timestamps();
         });
     }

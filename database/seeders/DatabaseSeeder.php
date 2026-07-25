@@ -22,7 +22,8 @@ class DatabaseSeeder extends Seeder
             'email' => 'test@example.com',
         ]);*/
         $this->call([
-            MpSeeder::class,
+            //MpSeeder::class,
+            ConstituenciesAndWardsSeeder::class,
         ]);
     }
 }
