@@ -168,8 +168,8 @@ class ConstituenciesAndWardsSeeder extends Seeder
                 ],
                 'wards' => [
                     ['name' => 'Junju', 'latitude' => -3.7150, 'longitude' => 39.7550, 'approximate_size' => 55.0],
-                    ['name' => 'Mwarakaya', 'latitude' => -3.7500, 'longitude' => 39.7900, 'approximate_size' => 48.0],
-                    ['name' => 'Shimo la Tewa', 'latitude' => -3.6150, 'longitude' => 39.7350, 'approximate_size' => 25.0],
+                    ['name' => 'Shimo la Tewa', 'latitude' => -3.7500, 'longitude' => 39.7900, 'approximate_size' => 48.0],
+                    ['name' => 'Mwarakaya', 'latitude' => -3.6150, 'longitude' => 39.7350, 'approximate_size' => 25.0],
                     ['name' => 'Chasimba', 'latitude' => -3.6800, 'longitude' => 39.7800, 'approximate_size' => 40.0],
                     ['name' => 'Takaungu', 'latitude' => -3.6850, 'longitude' => 39.8500, 'approximate_size' => 30.0],
                 ]

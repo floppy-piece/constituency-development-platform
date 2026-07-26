@@ -26,6 +26,7 @@ Route::post('/whatsapp/webhook', [WhatsAppWebhookController::class, 'handleWebho
 */
 Route::prefix('citizen')->group(function () {
     Route::post('/detect-mp', [CitizenLocationController::class, 'detectMp']);
+    Route::post('/telegram-location-token', [CitizenLocationController::class, 'generateTelegramToken']);
 });
 
 /*

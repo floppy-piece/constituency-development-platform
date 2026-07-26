@@ -45,16 +45,38 @@
         <template x-if="comparisonData">
             <div class="space-y-6">
                 <!-- AI Objective Winner Banner -->
-                <div class="p-4 rounded-2xl border flex items-center justify-between"
+                <div class="p-6 rounded-2xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
                      :class="comparisonData.recommended_winner === 'proposal_a' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'">
-                    <div class="flex items-center space-x-3">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div class="flex items-start space-x-3">
+                        <svg class="w-6 h-6 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                         <div>
-                            <span class="font-bold text-sm">Higher Priority Recommendation:</span>
-                            <span class="text-sm ml-1" x-text="comparisonData[comparisonData.recommended_winner].title"></span>
+                            <span class="text-xs uppercase tracking-wider font-semibold block text-slate-400">Gemma 4 Strategic Priority Recommendation:</span>
+                            <span class="text-lg font-bold text-slate-100" x-text="comparisonData[comparisonData.recommended_winner].title"></span>
                         </div>
                     </div>
-                    <span class="text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border border-current" x-text="'+' + comparisonData.score_difference + ' Points Higher Impact'"></span>
+                    <span class="text-xs font-black uppercase tracking-widest px-3 py-1.5 rounded-full border border-current shrink-0" x-text="'+' + comparisonData.score_difference + ' Points Higher Impact (' + comparisonData.confidence_score + '% Confidence)'"></span>
+                </div>
+
+                <!-- AI Deep Strategic Reasoning, Trade-Offs & Suggested Fix -->
+                <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4 shadow-lg">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        Gemma 4 Multi-Factor Decision Analysis
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-slate-300">
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                            <span class="font-bold text-slate-200 block text-emerald-400">Strategic Rationale</span>
+                            <p class="leading-relaxed" x-text="comparisonData.ai_reasoning"></p>
+                        </div>
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                            <span class="font-bold text-slate-200 block text-blue-400">Trade-Off Analysis</span>
+                            <p class="leading-relaxed" x-text="comparisonData.trade_off_analysis"></p>
+                        </div>
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                            <span class="font-bold text-slate-200 block text-amber-400">AI Suggested Resolution & Fix</span>
+                            <p class="leading-relaxed" x-text="comparisonData.suggested_fix"></p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Side by Side Cards -->
@@ -89,7 +111,16 @@
                                 <span class="text-slate-500">Avg Travel Distance:</span>
                                 <span class="font-bold text-slate-100" x-text="comparisonData.proposal_a.avg_travel_distance_km + ' km'"></span>
                             </div>
-                            <!-- Added Demographic & CIDP Information -->
+                            <!-- Budget & Period Metrics -->
+                            <div class="flex justify-between">
+                                <span class="text-slate-500">Estimated Budget:</span>
+                                <span class="font-bold text-emerald-400" x-text="comparisonData.proposal_a.estimated_budget_kes"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-500">Implementation Period:</span>
+                                <span class="font-bold text-slate-100" x-text="comparisonData.proposal_a.implementation_period"></span>
+                            </div>
+                            <!-- Demographic & CIDP Information -->
                             <div class="flex justify-between pt-1 border-t border-slate-800/60">
                                 <span class="text-slate-500">Poverty Index Score:</span>
                                 <span class="font-bold text-amber-400" x-text="comparisonData.proposal_a.poverty_index_score"></span>
@@ -130,7 +161,16 @@
                                 <span class="text-slate-500">Avg Travel Distance:</span>
                                 <span class="font-bold text-slate-100" x-text="comparisonData.proposal_b.avg_travel_distance_km + ' km'"></span>
                             </div>
-                            <!-- Added Demographic & CIDP Information -->
+                            <!-- Budget & Period Metrics -->
+                            <div class="flex justify-between">
+                                <span class="text-slate-500">Estimated Budget:</span>
+                                <span class="font-bold text-emerald-400" x-text="comparisonData.proposal_b.estimated_budget_kes"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-500">Implementation Period:</span>
+                                <span class="font-bold text-slate-100" x-text="comparisonData.proposal_b.implementation_period"></span>
+                            </div>
+                            <!-- Demographic & CIDP Information -->
                             <div class="flex justify-between pt-1 border-t border-slate-800/60">
                                 <span class="text-slate-500">Poverty Index Score:</span>
                                 <span class="font-bold text-amber-400" x-text="comparisonData.proposal_b.poverty_index_score"></span>

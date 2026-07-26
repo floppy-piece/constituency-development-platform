@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Constituency;
 use App\Models\Mp;
+Use App\Models\User;
+Use App\Models\Ward;
 use App\Services\GeocodingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class CitizenLocationController extends Controller
 {
@@ -26,24 +29,68 @@ class CitizenLocationController extends Controller
      */
     public function generateTelegramToken(Request $request): JsonResponse
     {
+        Log::info('generateTelegramToken hit. Payload received:', $request->all());
+
         $request->validate([
             'latitude' => 'required|numeric|between:-90,90',
             'longitude' => 'required|numeric|between:-180,180',
         ]);
 
+        $latitude = $request->input('latitude');
+        $longitude = $request->input('longitude');
+
+        // Retrieve user based on your session identifier (e.g., phone number)
+        $user = null;
+        
+        if (session()->has('citizen_phone')) {
+            $user = User::where('phone_number', session('citizen_phone'))->first();
+        }
+
+        // Fallback: If no session exists yet, default to the first user or create a session anchor
+        // (Adjust this lookup if you pass a phone number or identifier from your frontend form)
+        if (!$user) {
+            // For testing/development, fallback to user_id 1 if present
+            $user = User::where('user_id', 1)->first();
+            
+            if ($user) {
+                session(['citizen_phone' => $user->phone_number]);
+            }
+        }
+
+        if ($user) {
+            try {
+                // Explicitly targeting your database column names
+                $user->forceFill([
+                    'last_latitude' => $latitude,
+                    'last_longitude' => $longitude,
+                ])->save();
+
+                Log::info("Successfully updated database coordinates for User ID: {$user->user_id} -> Lat: {$latitude}, Lng: {$longitude}");
+            } catch (\Throwable $e) {
+                Log::error("Failed to save coordinates to database for user: {$e->getMessage()}", [
+                    'trace' => $e->getTraceAsString()
+                ]);
+            }
+        } else {
+            Log::warning("generateTelegramToken: No matching user record found in database to update coordinates for.");
+        }
+
         $token = Str::random(40);
 
-        // Store coordinates securely in cache for 15 minutes
+        // Store coordinates securely in cache for 15 minutes for Telegram deep-linking
         Cache::put('telegram_loc_' . $token, [
-            'latitude' => $request->input('latitude'),
-            'longitude' => $request->input('longitude')
+            'latitude' => $latitude,
+            'longitude' => $longitude
         ], now()->addMinutes(15));
+
+        Log::info("Generated temporary telegram cache token: [{$token}]");
 
         return response()->json([
             'status' => 'success',
             'start_payload' => $token
         ]);
     }
+
 
     public function detectMp(Request $request): JsonResponse
     {
@@ -75,6 +122,14 @@ class CitizenLocationController extends Controller
             ->values()
             ->all();
 
+        $ward = null;
+        foreach ($cleanCandidates as $areaName) {
+            $ward = Ward::where('name', 'LIKE', '%' . $areaName . '%')->first();
+            if ($ward) {
+                break;
+            }
+        }
+
         // Step B: Direct exact/partial match against the constituencies table
         foreach ($cleanCandidates as $areaName) {
             $constituency = Constituency::where('name', 'LIKE', '%' . $areaName . '%')
@@ -97,6 +152,7 @@ class CitizenLocationController extends Controller
                         'email' => $mp->email,
                         'avatar_path' => $mp->avatar_path ? asset($mp->avatar_path) : '/default-avatar.png',
                     ] : null,
+                    'ward' => $ward ? $ward->name : null,
                 ]);
             }
         }

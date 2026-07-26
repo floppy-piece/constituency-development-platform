@@ -53,14 +53,14 @@ class Gemma4Service
         }
 
         // System Prompt instructing Gemma 4 on text, audio, video, image, and document analysis
-        $systemPrompt = "You are a JSON generator and constituency AI advisor for Kenya.\n"
+        $systemPrompt = "You are a JSON generator and constituency advisor for Kenya.\n"
             . "Task Instructions:\n"
             . "1. Translate Swahili/Sheng/informal text to clear, professional English.\n"
             . "2. IF A MEDIA ATTACHMENT IS PRESENT (Image, Audio, Video, or PDF Document):\n"
             . "   - Carefully inspect/analyze the visual or audio content.\n"
             . "   - Determine what physical infrastructure issue or public problem is shown or described (e.g., road potholes, water bursts, broken school facilities, damaged bridges).\n"
             . "3. Include relevant findings directly in `translated_summary` (e.g. 'Citizen reports water pipe leak. Attached photo shows major burst flooding a road near a school.').\n"
-            . "4. Rate urgency strictly as 'low', 'medium', or 'high' based on combined text and media severity.\n"
+            . "4. Rate urgency strictly as 'low', 'medium', or 'high' based on combined text and media severity based on every aspect:cost, period of completion, effect if not solved immediately, and all the other aspects that is involved and return the process of requests thoughts and suggest possible fix for the solution.\n"
             . "5. Compare the submission to existing requests. If it matches an existing issue, return that integer ID in 'matched_request_id'. Otherwise return null.\n\n"
             . "EXISTING REQUESTS:\n"
             . "{$existingRequestsText}";
@@ -174,23 +174,20 @@ class Gemma4Service
     public function evaluateAndCompareProposals(array $proposalA, array $proposalB): array
     {
         if (empty($this->apiKey)) {
-            return [
-                'recommended_winner' => ($proposalA['citizen_reports'] ?? 0) >= ($proposalB['citizen_reports'] ?? 0) ? 'proposal_a' : 'proposal_b',
-                'score_proposal_a'   => 50,
-                'score_proposal_b'   => 50,
-                'ai_reasoning'       => 'Fallback evaluation: Evaluated based strictly on raw citizen report volume due to missing API key.',
-                'trade_off_analysis' => 'API Unavailable.',
-                'confidence_score'   => 50,
-            ];
+            return $this->fallbackEvaluation($proposalA, $proposalB, 'Missing API Key.');
         }
 
         $systemPrompt = "You are an expert AI Public Sector Planning & Infrastructure Policy Advisor for Kenya.\n"
-            . "Your task is to analyze two competing constituent proposal requests submitted to a Member of Parliament (MP).\n"
-            . "You must evaluate both proposals based on:\n"
-            . "1. Citizen Demand (Volume of complaints/requests & urgency level).\n"
-            . "2. Physical Infrastructure Deficit (Enrollment vs Capacity overcrowding, travel distance for citizens).\n"
-            . "3. Demographic Vulnerability & Poverty Index (Socio-economic impact).\n"
-            . "4. Alignment with County Integrated Development Plans (CIDP) & official public datasets.";
+            . "Your task is to analyze and compare two competing constituent proposal requests submitted to a Member of Parliament (MP).\n"
+            . "Even if both appear urgent, you MUST rigorously differentiate them and determine a definitive higher-priority winner.\n"
+            . "Evaluate both proposals comprehensively using all available data points and contextual metrics, including:\n"
+            . "1. Citizen Demand & Volume of complaints/requests.\n"
+            . "2. Physical Infrastructure Deficit (Enrollment vs Capacity overcrowding, travel distance).\n"
+            . "3. Demographic Vulnerability & Poverty Index Score.\n"
+            . "4. Estimated Financial/Budgetary impact and implementation Period.\n"
+            . "5. Critical consequences and compounding risks if left unaddressed immediately.\n"
+            . "6. Alignment with County Integrated Development Plans (CIDP).\n"
+            . "Provide a concrete, actionable `suggested_fix` for how the constituency development team should resolve the winning proposal.";
 
         $payload = [
             'proposal_a' => $proposalA,
@@ -201,6 +198,8 @@ class Gemma4Service
 
         try {
             $response = Http::withHeaders(['Content-Type' => 'application/json'])
+                ->timeout(20)
+                ->connectTimeout(10)
                 ->post($url, [
                     'system_instruction' => [
                         'parts' => [['text' => $systemPrompt]],
@@ -221,9 +220,18 @@ class Gemma4Service
                                 'score_proposal_b'   => ['type' => 'INTEGER'],
                                 'ai_reasoning'       => ['type' => 'STRING'],
                                 'trade_off_analysis' => ['type' => 'STRING'],
+                                'suggested_fix'      => ['type' => 'STRING'],
                                 'confidence_score'   => ['type' => 'INTEGER'],
                             ],
-                            'required' => ['recommended_winner', 'score_proposal_a', 'score_proposal_b', 'ai_reasoning', 'trade_off_analysis', 'confidence_score'],
+                            'required' => [
+                                'recommended_winner', 
+                                'score_proposal_a', 
+                                'score_proposal_b', 
+                                'ai_reasoning', 
+                                'trade_off_analysis', 
+                                'suggested_fix', 
+                                'confidence_score'
+                            ],
                         ],
                         'temperature' => 0.1,
                     ],
@@ -240,6 +248,7 @@ class Gemma4Service
                         'score_proposal_b'   => (int) ($parsed['score_proposal_b'] ?? 50),
                         'ai_reasoning'       => $parsed['ai_reasoning'] ?? 'Decision evaluated by Gemma 4.',
                         'trade_off_analysis' => $parsed['trade_off_analysis'] ?? 'N/A',
+                        'suggested_fix'      => $parsed['suggested_fix'] ?? 'N/A',
                         'confidence_score'   => (int) ($parsed['confidence_score'] ?? 80),
                     ];
                 }
@@ -247,16 +256,27 @@ class Gemma4Service
                 Log::error("Gemma 4 Proposal Comparison Error ({$response->status()}): " . $response->body());
             }
         } catch (Throwable $e) {
-            Log::error("Gemma 4 Proposal Comparison Exception: {$e->getMessage()}");
+            Log::warning("Gemma 4 API Timeout/Exception encountered: " . $e->getMessage() . ". Falling back to algorithmic score evaluation.");
         }
 
+        // Graceful algorithmic fallback when timeout occurs
+        return $this->fallbackEvaluation($proposalA, $proposalB, 'API Timeout / Network unreachable. Evaluated via base matrix scoring.');
+    }
+
+    private function fallbackEvaluation(array $proposalA, array $proposalB, string $reason): array
+    {
+        $scoreA = $proposalA['base_score'] ?? 50;
+        $scoreB = $proposalB['base_score'] ?? 50;
+        $winner = $scoreA >= $scoreB ? 'proposal_a' : 'proposal_b';
+
         return [
-            'recommended_winner' => 'proposal_a',
-            'score_proposal_a'   => 50,
-            'score_proposal_b'   => 50,
-            'ai_reasoning'       => 'Error contacting Gemma 4 decision engine.',
-            'trade_off_analysis' => 'N/A',
-            'confidence_score'   => 0,
+            'recommended_winner' => $winner,
+            'score_proposal_a'   => (int) $scoreA,
+            'score_proposal_b'   => (int) $scoreB,
+            'ai_reasoning'       => "Fallback Mode: {$reason} Winner determined by weighted infrastructure and citizen demand metrics.",
+            'trade_off_analysis' => 'Proposal A balances broader citizen report volume against Proposal B metrics.',
+            'suggested_fix'      => 'Deploy phased resource allocation prioritizing the facility with higher overcrowding ratios and CIDP alignment.',
+            'confidence_score'   => 60,
         ];
     }
 

@@ -88,11 +88,17 @@
                 </div>
             </template>
 
-            <!-- Unlocked State with Coordinates Passed to Bot Links -->
+            <!-- Unlocked State with Ward & Coordinates Displayed -->
             <template x-if="locationCaptured">
                 <div class="space-y-4 animate__animated animate__fadeIn">
-                    <div class="p-3 bg-emerald-950/50 border border-emerald-800/50 text-emerald-400 rounded-xl text-xs flex items-center gap-2">
-                        ✓ Location locked: Latitude <span x-text="lat.toFixed(4)"></span>, Longitude <span x-text="lng.toFixed(4)"></span>
+                    <div class="p-3 bg-emerald-950/50 border border-emerald-800/50 text-emerald-400 rounded-xl text-xs space-y-1">
+                        <div class="flex items-center justify-between">
+                            <span>✓ Ward: <strong class="text-white" x-text="wardName || 'Locating Ward...'"></strong></span>
+                            <button @click="captureLocation()" class="underline text-emerald-300 hover:text-white text-[11px] ml-2">Update</button>
+                        </div>
+                        <div class="text-[11px] text-emerald-300/80">
+                            Lat: <span x-text="lat.toFixed(4)"></span>, Lng: <span x-text="lng.toFixed(4)"></span>
+                        </div>
                     </div>
                     
                     <!-- Telegram Button passing coordinates token via start deep-link parameter -->
@@ -141,6 +147,7 @@
                 loading: false,
                 lat: null,
                 lng: null,
+                wardName: '',
                 locationError: '',
                 telegramUrl: "{{ config('services.telegram.bot_url', 'https://t.me/constituency_development_bot') }}",
                 whatsappUrl: "https://wa.me/{{ config('services.whatsapp.display_number') }}?text=Hello,%20I%20would%20like%20to%20submit%20a%20constituency%20request.",
@@ -156,14 +163,16 @@
                                 this.lng = pos.coords.longitude;
                                 
                                 try {
-                                    // Request temporary coordinate token for Telegram deep-linking
-                                    let response = await fetch('/api/telegram-location-token', {
+                                    let response = await fetch('/api/citizen/telegram-location-token', {
                                         method: 'POST',
                                         headers: {
                                             'Content-Type': 'application/json',
                                             'X-CSRF-TOKEN': csrfToken
                                         },
-                                        body: JSON.stringify({ latitude: this.lat, longitude: this.lng })
+                                        body: JSON.stringify({ 
+                                            latitude: this.lat, 
+                                            longitude: this.lng 
+                                        })
                                     });
                                     let data = await response.json();
                                     
@@ -172,23 +181,24 @@
                                         this.telegramUrl = `${baseUrl}?start=${data.start_payload}`;
                                     }
                                 } catch (e) {
-                                    console.error('Failed to bind location token for Telegram', e);
+                                    console.error('Failed to bind location token for Telegram:', e);
                                 }
 
-                                // Format WhatsApp pre-filled query string
-                                this.whatsappUrl = `https://wa.me/{{ config('services.whatsapp.display_number') }}?text=` + encodeURIComponent(`Hello, my coordinates are Lat: ${this.lat}, Lng: ${this.lng}. Here is my request: `);
-
+                                this.whatsappUrl = `https://wa.me/{{ config('services.whatsapp.display_number') }}?text=` + encodeURIComponent(`[SYS_LOC:${this.lat},${this.lng}]\nHello, I would like to submit a constituency request: `);
                                 this.locationCaptured = true;
                                 this.loading = false;
                                 
-                                // Fetch MP details for UI display card
-                                fetchMpDetails(this.lat, this.lng);
+                                // Fetch MP details and capture ward name
+                                fetchMpDetails(this.lat, this.lng, (ward) => {
+                                    this.wardName = ward;
+                                });
                             }, 
                             (err) => {
                                 this.loading = false;
                                 this.locationError = 'Location access is strictly required to map your ward. Please enable GPS permissions.';
+                                console.error('Browser geolocation error:', err);
                             },
-                            { enableHighAccuracy: true, timeout: 10000 }
+                            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                         );
                     } else {
                         this.loading = false;
@@ -198,18 +208,41 @@
             }
         }
 
+        // Automatically request fresh live coordinates on page load and update database immediately
         document.addEventListener("DOMContentLoaded", function () {
             if ("geolocation" in navigator) {
                 navigator.geolocation.getCurrentPosition(
-                    (pos) => fetchMpDetails(pos.coords.latitude, pos.coords.longitude),
-                    () => fetchMpDetails(null, null)
+                    (pos) => {
+                        const lat = pos.coords.latitude;
+                        const lng = pos.coords.longitude;
+
+                        fetchMpDetails(lat, lng);
+
+                        // Automatically sync to database and cache on load
+                        fetch('/api/citizen/telegram-location-token', {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json', 
+                                'X-CSRF-TOKEN': csrfToken 
+                            },
+                            body: JSON.stringify({ 
+                                latitude: lat, 
+                                longitude: lng 
+                            })
+                        }).catch((e) => console.error('Failed to sync initial GPS coordinates:', e));
+                    },
+                    (err) => {
+                        console.warn('Geolocation permission denied or unavailable on load:', err);
+                        fetchMpDetails(null, null);
+                    },
+                    { enableHighAccuracy: true, maximumAge: 0 }
                 );
             } else {
                 fetchMpDetails(null, null);
             }
         });
 
-        async function fetchMpDetails(lat, lng) {
+        async function fetchMpDetails(lat, lng, callback = null) {
             try {
                 const response = await fetch("/api/citizen/detect-mp", {
                     method: "POST",
@@ -225,6 +258,9 @@
 
                 if (data.status === "success") {
                     displaySingleMp(data.mp, data.constituency);
+                    if (callback && data.ward) {
+                        callback(data.ward);
+                    }
                 } else if (data.status === "multiple_candidates_found") {
                     displayMultipleMps(data.possible_mps, data.message);
                 } else {
