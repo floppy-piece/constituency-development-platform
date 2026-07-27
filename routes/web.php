@@ -13,6 +13,9 @@ Route::post('/set-language', [LanguageController::class, 'switch'])->name('langu
 
 Route::post('/api/mp/compare-proposals', [MpController::class, 'compareProposals']);
 
+Route::get('/privacy', function () {
+    return view('privacy');
+})->name('privacy');
 /*
 |--------------------------------------------------------------------------
 | Web Routes - Civic Platform & MP Dashboard Views
