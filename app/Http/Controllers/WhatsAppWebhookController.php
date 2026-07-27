@@ -12,6 +12,7 @@ use App\Services\GeocodingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
@@ -111,6 +112,8 @@ class WhatsAppWebhookController extends Controller
             // Resolve MP dynamically based on coordinates
             $assignedMp = $this->resolveMpForUser($user, $latitude, $longitude);
             $mpId = $assignedMp->mp_id ?? $assignedMp->id ?? 1;
+            $ward = $this->resolveWardForCoordinates($latitude, $longitude);
+            $wardId = $ward?->ward_id;
 
             // Process File Payloads
             $filePath = null;
@@ -145,6 +148,9 @@ class WhatsAppWebhookController extends Controller
 
             $urgency = $analysis['urgency'] ?? 'low';
             $matchedRequestId = $analysis['matched_request_id'] ?? null;
+            $confidence = (float) ($analysis['confidence'] ?? 0.4);
+            $status = ConstituencyRequest::statusFromConfidence($confidence);
+            $category = $analysis['category'] ?? 'General';
 
             // Deduplication & Creation Check with safe database defaults
             if ($matchedRequestId) {
@@ -153,18 +159,51 @@ class WhatsAppWebhookController extends Controller
                     ->first();
 
                 if ($similarRequest) {
-                    $similarRequest->touch();
+                    $clusterWardIds = $similarRequest->cluster_ward_ids ?? [];
+                    if (! is_array($clusterWardIds)) {
+                        $clusterWardIds = [];
+                    }
+                    if ($wardId) {
+                        $clusterWardIds = array_values(array_unique(array_merge($clusterWardIds, [$wardId])));
+                    }
+
+                    $similarRequest->increment('similar_count');
+                    $similarRequest->cluster_ward_ids = $clusterWardIds;
+                    $similarRequest->save();
+                } else {
+                    ConstituencyRequest::create([
+                        'user_id'          => $userId,
+                        'mp_id'            => $mpId,
+                        'ward_id'          => $wardId,
+                        'raw_message'      => $rawText ?: 'Media upload submission',
+                        'content'          => $analysis['translated_summary'] ?? ($rawText ?: 'Media upload submission'),
+                        'upload_file_path' => $filePath,
+                        'file_type'        => $fileType,
+                        'urgency'          => $urgency,
+                        'category'         => $category,
+                        'confidence'       => $confidence,
+                        'status'           => $status,
+                        'similar_count'    => 1,
+                        'cluster_ward_ids' => $wardId ? [$wardId] : [],
+                        'latitude'         => $latitude ?? 0.0000,
+                        'longitude'        => $longitude ?? 0.0000,
+                    ]);
                 }
             } else {
                 ConstituencyRequest::create([
                     'user_id'          => $userId,
                     'mp_id'            => $mpId,
+                    'ward_id'          => $wardId,
                     'raw_message'      => $rawText ?: 'Media upload submission',
                     'content'          => $analysis['translated_summary'] ?? ($rawText ?: 'Media upload submission'),
                     'upload_file_path' => $filePath,
                     'file_type'        => $fileType,
                     'urgency'          => $urgency,
-                    'category'         => $analysis['category'] ?? 'General',
+                    'category'         => $category,
+                    'confidence'       => $confidence,
+                    'status'           => $status,
+                    'similar_count'    => 1,
+                    'cluster_ward_ids' => $wardId ? [$wardId] : [],
                     'latitude'         => $latitude ?? 0.0000,
                     'longitude'        => $longitude ?? 0.0000,
                 ]);
@@ -197,6 +236,32 @@ class WhatsAppWebhookController extends Controller
 
             return response()->json(['status' => 'error', 'message' => 'Processed with error'], 200);
         }
+    }
+
+    /**
+     * Resolve the most likely ward based on incoming coordinates.
+     * Used to maintain real distinct ward counts inside issue clusters.
+     */
+    private function resolveWardForCoordinates(?float $latitude, ?float $longitude): ?object
+    {
+        if (! $latitude || ! $longitude) {
+            return null;
+        }
+
+        $ward = DB::table('wards')
+            ->select('*')
+            ->selectRaw(
+                '(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))) AS distance',
+                [$latitude, $longitude, $latitude]
+            )
+            ->whereRaw(
+                '(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))) <= SQRT(approximate_size / PI())',
+                [$latitude, $longitude, $latitude]
+            )
+            ->orderBy('distance', 'asc')
+            ->first();
+
+        return $ward;
     }
 
     /**
@@ -241,7 +306,7 @@ class WhatsAppWebhookController extends Controller
     /**
      * Automated WhatsApp Outbound Message Dispatcher with Error Logging
      */
-    private function sendWhatsAppMessage($to, $text)
+    private function sendWhatsAppMessage(string $to, string $text): void
     {
         $token = config('services.whatsapp.access_token');
         $phoneId = config('services.whatsapp.phone_number_id');
