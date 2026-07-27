@@ -147,8 +147,8 @@ class TelegramWebhookController extends Controller
                 return response()->json(['status' => 'rate_limited'], 200);
             }
 
-            // Extract content types via File Service
-            [$filePath, $fileType] = $this->fileService->downloadTelegramFile($message);
+            // Extract content types via File Service (Passing full $message array to avoid passing null fileType to Gemma)
+            [$filePath, $fileType] = $this->fileService->processIncomingMedia($message);
 
             // Retrieve recent requests for LLM deduplication comparison
             $recentRequests = ConstituencyRequest::where('mp_id', $mpId)
@@ -168,6 +168,9 @@ class TelegramWebhookController extends Controller
 
             $urgency = $analysis['urgency'] ?? 'low';
             $matchedRequestId = $analysis['matched_request_id'] ?? null;
+            $confidence = (float) ($analysis['confidence'] ?? 0.4);
+            $status = ConstituencyRequest::statusFromConfidence($confidence);
+            $category = $analysis['category'] ?? 'General';
 
             if ($matchedRequestId) {
                 $similarRequest = ConstituencyRequest::where('request_id', $matchedRequestId)
@@ -175,26 +178,69 @@ class TelegramWebhookController extends Controller
                     ->first();
 
                 if ($similarRequest) {
-                    $similarRequest->touch();
+                    $clusterWardIds = $similarRequest->cluster_ward_ids ?? [];
+                    if (!is_array($clusterWardIds)) {
+                        $clusterWardIds = [];
+                    }
+                    if ($ward->ward_id ?? null) {
+                        $clusterWardIds = array_values(array_unique(array_merge($clusterWardIds, [$ward->ward_id])));
+                    }
+
+                    $similarRequest->increment('similar_count');
+                    $similarRequest->cluster_ward_ids = $clusterWardIds;
+                    $similarRequest->save();
+                } else {
+                    ConstituencyRequest::create([
+                        'user_id'          => $userId,
+                        'mp_id'            => $mpId,
+                        'ward_id'          => $ward->ward_id ?? null,
+                        'raw_message'      => $rawText ?: 'Media upload submission',
+                        'content'          => $analysis['translated_summary'] ?? ($rawText ?: 'Media upload submission'),
+                        'upload_file_path' => $filePath,
+                        'file_type'        => $fileType,
+                        'urgency'          => $urgency,
+                        'category'         => $category,
+                        'confidence'       => $confidence,
+                        'status'           => $status,
+                        'similar_count'    => 1,
+                        'cluster_ward_ids' => isset($ward->ward_id) ? [$ward->ward_id] : [],
+                        'latitude'         => $latitude,
+                        'longitude'        => $longitude,
+                    ]);
                 }
             } else {
                 ConstituencyRequest::create([
                     'user_id'          => $userId,
                     'mp_id'            => $mpId,
-                    'ward_id'          => $ward->ward_id,
-                    'raw_message'      => $rawText,
-                    'content'          => $analysis['translated_summary'] ?? $rawText,
+                    'ward_id'          => $ward->ward_id ?? null,
+                    'raw_message'      => $rawText ?: 'Media upload submission',
+                    'content'          => $analysis['translated_summary'] ?? ($rawText ?: 'Media upload submission'),
                     'upload_file_path' => $filePath,
                     'file_type'        => $fileType,
                     'urgency'          => $urgency,
-                    'category'         => $analysis['category'] ?? 'General',
+                    'category'         => $category,
+                    'confidence'       => $confidence,
+                    'status'           => $status,
+                    'similar_count'    => 1,
+                    'cluster_ward_ids' => isset($ward->ward_id) ? [$ward->ward_id] : [],
                     'latitude'         => $latitude,
                     'longitude'        => $longitude,
                 ]);
             }
 
             $mpName = $mp->mp_name ?? 'your MP';
-            $confirmationMessage = "Your request has been forwarded to {$mpName} ({$constituency->name}, {$ward->name} Ward). You can send another request after two hours.";
+            $constituencyName = $constituency->name ?? '';
+            $wardName = $ward->name ?? '';
+
+            $confirmationMessage = "Your request has been forwarded to {$mpName}";
+            if (!empty($constituencyName)) {
+                $confirmationMessage .= " ({$constituencyName}";
+                if (!empty($wardName)) {
+                    $confirmationMessage .= ", {$wardName} Ward";
+                }
+                $confirmationMessage .= ")";
+            }
+            $confirmationMessage .= ". You can send another request after two hours.";
 
             $this->sendTelegramMessage($chatId, $confirmationMessage);
 
@@ -226,10 +272,5 @@ class TelegramWebhookController extends Controller
     private function sendTelegramMessage($chatId, $text)
     {
         $this->messagingService->sendMessage($chatId, $text);
-    }
-
-    private function downloadTelegramFile($fileId, $extension): ?string
-    {
-        return $this->fileService->downloadTelegramFile($fileId, $extension);
     }
 }
