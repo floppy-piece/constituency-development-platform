@@ -6,7 +6,7 @@ use App\Models\Constituency;
 use App\Models\Mp;
 use App\Models\Ward;
 use Illuminate\Support\Facades\DB;
-use App\Service\GeocodingService;
+use App\Services\GeocodingService;
 
 class TelegramLocationService
 {
