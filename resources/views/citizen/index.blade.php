@@ -218,6 +218,8 @@
 
                         fetchMpDetails(lat, lng);
 
+                        sessionStorage.setItem('user_lat', lat);
+                        sessionStorage.setItem('user_lng', lng);
                         // Automatically sync to database and cache on load
                         fetch('/api/citizen/telegram-location-token', {
                             method: 'POST',

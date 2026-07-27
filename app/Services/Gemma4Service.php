@@ -137,21 +137,33 @@ class Gemma4Service
                     'response_schema'    => [
                         'type' => 'OBJECT',
                         'properties' => [
-                            'translated_summary' => ['type' => 'STRING'],
-                            'category'           => ['type' => 'STRING'],
-                            'urgency'            => [
+                            'translated_summary'  => ['type' => 'STRING'],
+                            'category'            => ['type' => 'STRING'],
+                            'urgency_score'       => ['type' => 'INTEGER'],
+                            'urgency'             => [
                                 'type' => 'STRING',
                                 'enum' => ['low', 'medium', 'high']
                             ],
-                            'confidence'         => ['type' => 'NUMBER'],
-                            'matched_request_id' => [
+                            'confidence'          => ['type' => 'NUMBER'],
+                            'evaluation_thoughts' => ['type' => 'STRING'],
+                            'suggested_fix'       => ['type' => 'STRING'],
+                            'matched_request_id'  => [
                                 'type'     => 'INTEGER',
                                 'nullable' => true,
                             ],
                         ],
-                        'required' => ['translated_summary', 'category', 'urgency', 'confidence'],
+                        'required' => [
+                            'translated_summary', 
+                            'category', 
+                            'urgency_score', 
+                            'urgency', 
+                            'confidence', 
+                            'evaluation_thoughts', 
+                            'suggested_fix'
+                        ],
                     ],
-                    'temperature' => 0.1,
+                    'temperature'        => 0.1,
+                    'max_output_tokens'  => 1024, // Prevents runaway repetition loops!
                 ],
             ]);
 
@@ -182,11 +194,14 @@ class Gemma4Service
             $confidence = $this->normalizeConfidence($parsed['confidence'] ?? null);
 
             return [
-                'translated_summary' => $parsed['translated_summary'] ?? $text ?? 'Issue reported by citizen with image.',
-                'category'           => $parsed['category'] ?? 'General',
-                'urgency'            => strtolower($parsed['urgency'] ?? 'low'),
-                'confidence'         => $confidence,
-                'matched_request_id' => is_numeric($parsed['matched_request_id'] ?? null)
+                'translated_summary'  => $parsed['translated_summary'] ?? $text ?? 'Issue reported by citizen.',
+                'category'            => $parsed['category'] ?? 'General',
+                'urgency_score'       => (int) ($parsed['urgency_score'] ?? 3),
+                'urgency'             => strtolower($parsed['urgency'] ?? 'low'),
+                'confidence'          => $confidence,
+                'evaluation_thoughts' => $parsed['evaluation_thoughts'] ?? 'Evaluated via Gemma 4 governance model.',
+                'suggested_fix'       => $parsed['suggested_fix'] ?? 'Inspect site and deploy resources accordingly.',
+                'matched_request_id'  => is_numeric($parsed['matched_request_id'] ?? null)
                     ? (int) $parsed['matched_request_id']
                     : null,
             ];
