@@ -43,7 +43,7 @@ class TelegramWebhookController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $message = $request->input('message');
+        $message = $request->input('message') ?? $request->input('edited_message');
         if (! $message) {
             Log::info('Telegram Webhook: Ignored request (no message payload).');
             return response()->json(['status' => 'ignored'], 200);
@@ -147,8 +147,10 @@ class TelegramWebhookController extends Controller
                 return response()->json(['status' => 'rate_limited'], 200);
             }
 
-            // Extract content types via File Service (Passing full $message array to avoid passing null fileType to Gemma)
-            [$filePath, $fileType] = $this->fileService->processIncomingMedia($message);
+            // Extract content types and file info via File Service using downloadTelegramFile()
+            $fileData = $this->fileService->downloadTelegramFile($request->all());
+            $filePath = $fileData['path'] ?? null;
+            $fileType = $fileData['type'] ?? 'text';
 
             // Retrieve recent requests for LLM deduplication comparison
             $recentRequests = ConstituencyRequest::where('mp_id', $mpId)
