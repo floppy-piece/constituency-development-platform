@@ -53,17 +53,36 @@ class Gemma4Service
         }
 
         // System Prompt instructing Gemma 4 on text, audio, video, image, and document analysis
-        $systemPrompt = "You are a JSON generator and constituency advisor for Kenya.\n"
-            . "Task Instructions:\n"
-            . "1. Translate Swahili/Sheng/informal text to clear, professional English.\n"
-            . "2. IF A MEDIA ATTACHMENT IS PRESENT (Image, Audio, Video, or PDF Document):\n"
-            . "   - Carefully inspect/analyze the visual or audio content.\n"
-            . "   - Determine what physical infrastructure issue or public problem is shown or described (e.g., road potholes, water bursts, broken school facilities, damaged bridges).\n"
-            . "3. Include relevant findings directly in `translated_summary` (e.g. 'Citizen reports water pipe leak. Attached photo shows major burst flooding a road near a school.').\n"
-            . "4. Rate urgency strictly as 'low', 'medium', or 'high' based on combined text and media severity based on every aspect:cost, period of completion, effect if not solved immediately, and all the other aspects that is involved and return the process of requests thoughts and suggest possible fix for the solution.\n"
-            . "5. Compare the submission to existing requests. If it matches an existing issue, return that integer ID in 'matched_request_id'. Otherwise return null.\n\n"
-            . "EXISTING REQUESTS:\n"
-            . "{$existingRequestsText}";
+        $systemPrompt = "You are a JSON generator, policy analyst, and constituency advisor for Kenya.\n"
+                        . "Task Instructions:\n"
+                        . "1. Translate Swahili/Sheng/informal text to clear, professional English.\n"
+                        . "2. IF A MEDIA ATTACHMENT IS PRESENT (Image, Audio, Video, or PDF Document):\n"
+                        . "   - Carefully inspect/analyze the visual or audio content.\n"
+                        . "   - Determine what physical infrastructure issue or public problem is shown or described (e.g., road potholes, water bursts, broken school facilities, damaged bridges).\n"
+                        . "3. Include relevant findings directly in `translated_summary` (e.g. 'Citizen reports water pipe leak. Attached photo shows major burst flooding a road near a school.').\n"
+                        . "4. Evaluate the request holistically based on all government governance dimensions:\n"
+                        . "   - Estimated financial cost impact.\n"
+                        . "   - Expected time/period of completion.\n"
+                        . "   - Cascading public risks and compounding effects if left unresolved (e.g., public health hazards, economic paralysis, security risks).\n"
+                        . "   - Societal impact and stakeholder alignment.\n"
+                        . "5. Compute a quantitative Urgency Score from 0 to 10 based on this comprehensive evaluation, and derive the categorical urgency level strictly as follows:\n"
+                        . "   - Score 0-3: 'low'\n"
+                        . "   - Score 4-7: 'medium'\n"
+                        . "   - Score 8-10: 'high'\n"
+                        . "6. Provide a rigorous step-by-step evaluation thought process in `evaluation_thoughts` and formulate a concrete, actionable technical/administrative remediation plan in `suggested_fix`.\n"
+                        . "7. Compare the submission to existing requests. If it semantically matches an existing issue, return that integer ID in 'matched_request_id'. Otherwise return null.\n\n"
+                        . "Your response MUST be a valid JSON object with the following keys:\n"
+                        . "{\n"
+                        . "  \"translated_summary\": \"string\",\n"
+                        . "  \"category\": \"string\",\n"
+                        . "  \"urgency_score\": integer (0-10),\n"
+                        . "  \"urgency\": \"string (low, medium, high)\",\n"
+                        . "  \"evaluation_thoughts\": \"string (detailing cost, time, and inaction effects)\",\n"
+                        . "  \"suggested_fix\": \"string (actionable government fix)\",\n"
+                        . "  \"matched_request_id\": integer or null\n"
+                        . "}\n\n"
+                        . "EXISTING REQUESTS:\n"
+                        . "{$existingRequestsText}";
 
         $userContent = "User Submission: " . ($text ?: "No text provided (Attachment provided).");
 
