@@ -28,13 +28,34 @@ class ConstituencyRequest extends Model
         'longitude',
         'is_within_constituency',
         'similarity_hash',
+        'similar_count',
+        'cluster_ward_ids',
+        'status',
+        'confidence',
     ];
 
     protected $casts = [
         'latitude' => 'float',
         'longitude' => 'float',
         'is_within_constituency' => 'boolean',
+        'confidence' => 'float',
+        'similar_count' => 'integer',
+        'cluster_ward_ids' => 'array',
     ];
+
+    public const STATUS_PENDING_REVIEW = 'pending_review';
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_IN_PROGRESS = 'in_progress';
+    public const STATUS_RESOLVED = 'resolved';
+
+    public const CONFIDENCE_THRESHOLD = 0.70;
+
+    public static function statusFromConfidence(float $confidence): string
+    {
+        return $confidence < self::CONFIDENCE_THRESHOLD
+            ? self::STATUS_PENDING_REVIEW
+            : self::STATUS_PENDING;
+    }
 
     public function user()
     {

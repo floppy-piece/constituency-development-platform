@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Services\ProposalScoringService;
+use App\Services\TelegramNotifier;
 use App\Models\ConstituencyFacility;
 
 
@@ -30,25 +31,57 @@ class MpController extends Controller
 
         $mpId = $mp->mp_id ?? $mp->id;
 
-        $totalRequests = ConstituentRequest::where('mp_id', $mpId)->count();
+        $totalRequests = ConstituentRequest::where('mp_id', $mpId)
+            ->where('status', '!=', ConstituentRequest::STATUS_RESOLVED)
+            ->count();
         $highUrgencyRequests = ConstituentRequest::where('mp_id', $mpId)
             ->where('urgency', 'high')
+            ->where('status', '!=', ConstituentRequest::STATUS_RESOLVED)
+            ->count();
+        $needsReviewCount = ConstituentRequest::where('mp_id', $mpId)
+            ->where('status', ConstituentRequest::STATUS_PENDING_REVIEW)
             ->count();
 
-        // Fetch ALL constituent requests tied to this MP
-        $recentRequests = ConstituentRequest::with('user:user_id,phone_number')
+        // Fetch ALL constituent requests tied to this MP (exclude resolved from main feed)
+        $recentRequests = ConstituentRequest::with(['user:user_id,phone_number', 'ward:ward_id,name'])
             ->where('mp_id', $mpId)
+            ->where('status', '!=', ConstituentRequest::STATUS_RESOLVED)
             ->latest('created_at')
             ->get()
             ->map(function ($req, $index) {
                 // Aligned with model primary key 'request_id'
                 $id = $req->request_id ?? $req->id ?? ($index + 1);
+                $similarCount = (int) ($req->similar_count ?? 1);
+
+                $clusterWardIds = $req->cluster_ward_ids ?? [];
+                if (! is_array($clusterWardIds)) {
+                    $clusterWardIds = [];
+                }
+
+                $clusterWardCount = count(array_unique(array_filter($clusterWardIds)));
+                if ($clusterWardCount === 0 && ! empty($req->ward_id)) {
+                    $clusterWardCount = 1;
+                }
+
+                $reportWord = $similarCount === 1 ? 'report' : 'reports';
+                $wardWord = $clusterWardCount === 1 ? 'ward' : 'wards';
+                $firstSeen = $req->created_at ? $req->created_at->format('M j, Y') : 'N/A';
+                $clusterSummary = sprintf(
+                    '%d %s · %d %s · first seen %s',
+                    $similarCount,
+                    $reportWord,
+                    $clusterWardCount,
+                    $wardWord,
+                    $firstSeen
+                );
 
                 return [
                     'id' => $id,
                     'request_id' => $id,
                     'urgency' => $req->urgency ?? 'low',
                     'category' => $req->category ?? $req->primary_topic ?? 'General',
+                    'status' => $req->status ?? ConstituentRequest::STATUS_PENDING,
+                    'confidence' => $req->confidence,
                     'file_type' => $req->file_type ?? 'text',
                     'upload_file_path' => $req->upload_file_path ?? null,
                     'content' => $req->content ?? $req->raw_message,
@@ -59,7 +92,9 @@ class MpController extends Controller
                     'user' => [
                         'phone_number' => $req->user?->phone_number ?? 'N/A',
                     ],
-                    'similarity_hash' => $req->similarity_hash ?? 1,
+                    'similar_count' => $similarCount,
+                    'ward_name' => $req->ward?->name,
+                    'cluster_summary' => $clusterSummary,
                 ];
             });
 
@@ -75,6 +110,7 @@ class MpController extends Controller
             'metrics' => [
                 'total_requests' => $totalRequests,
                 'high_urgency_requests' => $highUrgencyRequests,
+                'needs_review_count' => $needsReviewCount,
             ],
             'recent_requests' => $recentRequests,
         ]);
@@ -121,9 +157,9 @@ class MpController extends Controller
     }
 
     /**
-     * Mark a constituent request as resolved.
+     * Update request workflow status and notify the citizen via Telegram when applicable.
      */
-    public function markAsResolved(int $id): JsonResponse
+    public function updateStatus(Request $request, int $id, TelegramNotifier $telegramNotifier): JsonResponse
     {
         /** @var \App\Models\Mp|null $mp */
         $mp = Auth::guard('mp_api')->user();
@@ -135,9 +171,14 @@ class MpController extends Controller
             ], 401);
         }
 
+        $validated = $request->validate([
+            'status' => 'required|in:pending,in_progress,resolved,pending_review',
+        ]);
+
         $mpId = $mp->mp_id ?? $mp->id;
 
-        $requestItem = ConstituentRequest::where('request_id', $id)
+        $requestItem = ConstituentRequest::with('user')
+            ->where('request_id', $id)
             ->where('mp_id', $mpId)
             ->first();
 
@@ -148,12 +189,45 @@ class MpController extends Controller
             ], 404);
         }
 
-        $requestItem->delete();
+        $newStatus = $validated['status'];
+        $previousStatus = $requestItem->status;
+
+        if ($previousStatus === $newStatus) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Status unchanged.',
+                'request_status' => $newStatus,
+            ]);
+        }
+
+        $requestItem->update(['status' => $newStatus]);
+
+        // Notify citizen on meaningful transitions (confirm from review = categorized)
+        if (in_array($newStatus, [
+            ConstituentRequest::STATUS_PENDING,
+            ConstituentRequest::STATUS_IN_PROGRESS,
+            ConstituentRequest::STATUS_RESOLVED,
+        ], true)) {
+            $telegramNotifier->notifyRequestStatus($requestItem->fresh('user'), $newStatus);
+        }
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Request marked as resolved successfully.',
+            'message' => 'Request status updated.',
+            'request_status' => $newStatus,
         ]);
+    }
+
+    /**
+     * Mark a constituent request as resolved (compat endpoint).
+     */
+    public function markAsResolved(int $id, TelegramNotifier $telegramNotifier): JsonResponse
+    {
+        return $this->updateStatus(
+            new Request(['status' => ConstituentRequest::STATUS_RESOLVED]),
+            $id,
+            $telegramNotifier
+        );
     }
 
     /**
@@ -211,7 +285,7 @@ class MpController extends Controller
                 'high' => 3,
                 'medium' => 2,
                 default => 1,
-            } * ($item->similarity_hash ?? 1);
+            } * max(1, (int) ($item->similar_count ?? 1));
 
             return [
                 'type' => 'Feature',
@@ -224,7 +298,7 @@ class MpController extends Controller
                     'summary' => $item->content,
                     'category' => $item->category ?? 'General',
                     'urgency' => $item->urgency,
-                    'reports_count' => $item->similarity_hash ?? 1,
+                    'reports_count' => max(1, (int) ($item->similar_count ?? 1)),
                     'heatmap_intensity' => min(10, $weight),
                     'created_at' => $item->created_at ? $item->created_at->toIso8601String() : null,
                 ],
@@ -255,30 +329,95 @@ class MpController extends Controller
         $baseQuery = ConstituentRequest::where('mp_id', $mpId);
 
         $totalRequests = (clone $baseQuery)->count();
-        $resolvedCount = (clone $baseQuery)->where('status', 'resolved')->count();
-        
-        // Category Breakdown
+        $resolvedCount = (clone $baseQuery)->where('status', ConstituentRequest::STATUS_RESOLVED)->count();
+        $openQuery = (clone $baseQuery)->where('status', '!=', ConstituentRequest::STATUS_RESOLVED);
+        $openCount = (clone $openQuery)->count();
+
+        // Category Breakdown (all requests)
         $categories = (clone $baseQuery)
             ->select('category', DB::raw('count(*) as count'))
             ->groupBy('category')
             ->pluck('count', 'category');
 
-        // Ward Distribution (Now utilizing the relationship)
+        // Community priorities: open requests by category with percentages
+        $priorityRows = (clone $openQuery)
+            ->select('category', DB::raw('count(*) as count'))
+            ->groupBy('category')
+            ->orderByDesc('count')
+            ->get()
+            ->map(function ($row) use ($openCount) {
+                $count = (int) $row->count;
+                $label = $row->category ?: 'General';
+
+                return [
+                    'category' => $label,
+                    'count' => $count,
+                    'percentage' => $openCount > 0 ? round(($count / $openCount) * 100, 1) : 0,
+                ];
+            })
+            ->values();
+
+        // Ward Distribution with high-urgency share (severity signal)
         $wardDistribution = (clone $baseQuery)
-        ->join('wards', 'requests.ward_id', '=', 'wards.ward_id')
-        ->select('wards.name as ward_name', DB::raw('count(requests.request_id) as total_requests'))
-        ->groupBy('wards.name')
-        ->get();
+            ->join('wards', 'requests.ward_id', '=', 'wards.ward_id')
+            ->select(
+                'wards.name as ward_name',
+                DB::raw('count(requests.request_id) as total_requests'),
+                DB::raw("sum(case when requests.urgency = 'high' then 1 else 0 end) as high_urgency_count")
+            )
+            ->groupBy('wards.name')
+            ->orderByDesc('total_requests')
+            ->get()
+            ->map(function ($ward) {
+                $total = (int) $ward->total_requests;
+                $high = (int) $ward->high_urgency_count;
+                $share = $total > 0 ? round(($high / $total) * 100, 1) : 0;
+
+                $severity = 'low';
+                if ($share >= 40 || $high >= 5) {
+                    $severity = 'high';
+                } elseif ($share >= 20 || $high >= 2) {
+                    $severity = 'medium';
+                }
+
+                return [
+                    'ward_name' => $ward->ward_name,
+                    'total_requests' => $total,
+                    'high_urgency_count' => $high,
+                    'high_urgency_share' => $share,
+                    'severity' => $severity,
+                ];
+            });
+
+        // Top ward × category combinations among open requests
+        $wardCategoryTop = (clone $openQuery)
+            ->join('wards', 'requests.ward_id', '=', 'wards.ward_id')
+            ->select(
+                'wards.name as ward_name',
+                'requests.category',
+                DB::raw('count(requests.request_id) as count')
+            )
+            ->groupBy('wards.name', 'requests.category')
+            ->orderByDesc('count')
+            ->limit(8)
+            ->get()
+            ->map(fn ($row) => [
+                'ward_name' => $row->ward_name,
+                'category' => $row->category ?: 'General',
+                'count' => (int) $row->count,
+            ]);
 
         return response()->json([
-        'status' => 'success',
-        'data' => [
-            'total_requests' => $totalRequests,
-            'resolved_requests' => $resolvedCount,
-            'categories' => $categories,
-            'ward_distribution' => $wardDistribution,
-        ]
+            'status' => 'success',
+            'data' => [
+                'total_requests' => $totalRequests,
+                'resolved_requests' => $resolvedCount,
+                'open_requests' => $openCount,
+                'categories' => $categories,
+                'community_priorities' => $priorityRows,
+                'ward_distribution' => $wardDistribution,
+                'ward_category_top' => $wardCategoryTop,
+            ],
         ]);
-
     }
 }

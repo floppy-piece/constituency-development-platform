@@ -70,13 +70,17 @@ class Gemma4Service
                         . "   - Score 4-7: 'medium'\n"
                         . "   - Score 8-10: 'high'\n"
                         . "6. Provide a rigorous step-by-step evaluation thought process in `evaluation_thoughts` and formulate a concrete, actionable technical/administrative remediation plan in `suggested_fix`.\n"
-                        . "7. Compare the submission to existing requests. If it semantically matches an existing issue, return that integer ID in 'matched_request_id'. Otherwise return null.\n\n"
+                        . "7. Compare the submission to existing requests. If it semantically matches an existing issue, return that integer ID in 'matched_request_id'. Otherwise return null.\n"
+                        . "8. Assign a `category` such as Roads, Water, Education, Health, Security, Sanitation, Electricity, or General.\n"
+                        . "9. Provide a `confidence` score from 0.0 to 1.0 reflecting how sure you are about category, urgency, and any dedup match. "
+                        . "Use lower confidence (below 0.7) when language is ambiguous, media is unclear, location/context is missing, or the match is uncertain.\n\n"
                         . "Your response MUST be a valid JSON object with the following keys:\n"
                         . "{\n"
                         . "  \"translated_summary\": \"string\",\n"
                         . "  \"category\": \"string\",\n"
                         . "  \"urgency_score\": integer (0-10),\n"
                         . "  \"urgency\": \"string (low, medium, high)\",\n"
+                        . "  \"confidence\": number (0.0 to 1.0),\n"
                         . "  \"evaluation_thoughts\": \"string (detailing cost, time, and inaction effects)\",\n"
                         . "  \"suggested_fix\": \"string (actionable government fix)\",\n"
                         . "  \"matched_request_id\": integer or null\n"
@@ -134,16 +138,18 @@ class Gemma4Service
                         'type' => 'OBJECT',
                         'properties' => [
                             'translated_summary' => ['type' => 'STRING'],
+                            'category'           => ['type' => 'STRING'],
                             'urgency'            => [
                                 'type' => 'STRING',
                                 'enum' => ['low', 'medium', 'high']
                             ],
+                            'confidence'         => ['type' => 'NUMBER'],
                             'matched_request_id' => [
                                 'type'     => 'INTEGER',
                                 'nullable' => true,
                             ],
                         ],
-                        'required' => ['translated_summary', 'urgency'],
+                        'required' => ['translated_summary', 'category', 'urgency', 'confidence'],
                     ],
                     'temperature' => 0.1,
                 ],
@@ -173,9 +179,13 @@ class Gemma4Service
                 return $this->fallbackResponse($text);
             }
 
+            $confidence = $this->normalizeConfidence($parsed['confidence'] ?? null);
+
             return [
                 'translated_summary' => $parsed['translated_summary'] ?? $text ?? 'Issue reported by citizen with image.',
+                'category'           => $parsed['category'] ?? 'General',
                 'urgency'            => strtolower($parsed['urgency'] ?? 'low'),
+                'confidence'         => $confidence,
                 'matched_request_id' => is_numeric($parsed['matched_request_id'] ?? null)
                     ? (int) $parsed['matched_request_id']
                     : null,
@@ -185,6 +195,23 @@ class Gemma4Service
             Log::error('Gemma 4 Exception: ' . $e->getMessage());
             return $this->fallbackResponse($text);
         }
+    }
+
+    /**
+     * Clamp model confidence to 0.0–1.0. Values above 1 are treated as percentages.
+     */
+    private function normalizeConfidence(mixed $value): float
+    {
+        if (! is_numeric($value)) {
+            return 0.4;
+        }
+
+        $confidence = (float) $value;
+        if ($confidence > 1.0) {
+            $confidence = $confidence / 100;
+        }
+
+        return max(0.0, min(1.0, round($confidence, 2)));
     }
 
     /**
@@ -442,7 +469,9 @@ class Gemma4Service
     {
         return [
             'translated_summary' => $text ?: 'Issue reported by citizen.',
+            'category'           => 'General',
             'urgency'            => 'low',
+            'confidence'         => 0.4,
             'matched_request_id' => null,
         ];
     }

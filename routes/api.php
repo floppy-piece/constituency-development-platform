@@ -68,26 +68,13 @@ Route::prefix('mp')->group(function () {
 
 
         Route::get('/analytics/data', [MpController::class, 'getAnalyticsData']);
-        // Resolve Request API Endpoint (for Alpine.js)
-        // GET request details
+
         Route::get('/requests/{id}', function ($id) {
-            $request = ConstituencyRequest::findOrFail($id);
+            $request = \App\Models\ConstituencyRequest::findOrFail($id);
             return response()->json($request);
         })->whereNumber('id');
 
-        // POST resolve request
-        Route::post('/requests/{id}/resolve', function ($id) {
-            $mp = auth('mp_api')->user();
-            
-            $requestItem = \App\Models\ConstituencyRequest::where('mp_id', $mp->mp_id)
-                ->findOrFail($id);
-            
-            $requestItem->update(['status' => 'resolved']);
-
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'Request marked as resolved!'
-            ]);
-        })->whereNumber('id');
+        Route::post('/requests/{id}/status', [MpController::class, 'updateStatus'])->whereNumber('id');
+        Route::post('/requests/{id}/resolve', [MpController::class, 'markAsResolved'])->whereNumber('id');
     });
 });

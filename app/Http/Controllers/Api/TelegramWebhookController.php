@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\Ward;
 use App\Services\GeocodingService;
 use App\Services\Gemma4Service;
+use App\Services\TelegramNotifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -23,11 +24,16 @@ class TelegramWebhookController extends Controller
 {
     protected Gemma4Service $gemmaService;
     protected GeocodingService $geocodingService;
+    protected TelegramNotifier $telegramNotifier;
 
-    public function __construct(Gemma4Service $gemmaService, GeocodingService $geocodingService)
-    {
+    public function __construct(
+        Gemma4Service $gemmaService,
+        GeocodingService $geocodingService,
+        TelegramNotifier $telegramNotifier
+    ) {
         $this->gemmaService = $gemmaService;
         $this->geocodingService = $geocodingService;
+        $this->telegramNotifier = $telegramNotifier;
     }
 
     public function handleWebhook(Request $request)
@@ -86,13 +92,13 @@ class TelegramWebhookController extends Controller
 
                     Cache::forget($cacheKey);
 
-                    $this->sendTelegramMessage(
+                    $this->telegramNotifier->send(
                         $chatId, 
                         "✅ Location successfully verified and updated! You can now send your constituency request."
                     );
                 } else {
                     Log::warning("Telegram Webhook: Cache key [{$cacheKey}] was empty, expired, or invalid.");
-                    $this->sendTelegramMessage(
+                    $this->telegramNotifier->send(
                         $chatId, 
                         "⚠️ Your location session link has expired or is invalid. Please revisit the web platform to re-share your location."
                     );
@@ -108,7 +114,7 @@ class TelegramWebhookController extends Controller
 
             if (!$latitude || !$longitude) {
                 Log::warning("Telegram Webhook: Request blocked because coordinates are missing/null for user ID {$userId}.");
-                $this->sendTelegramMessage(
+                $this->telegramNotifier->send(
                     $chatId, 
                     "⚠️ Location Missing: Please visit our web platform first, share your physical location, and click the Telegram submission link."
                 );
@@ -119,7 +125,7 @@ class TelegramWebhookController extends Controller
             $resolution = $this->resolveLocationContext($latitude, $longitude, $request->ip());
             
             if (!$resolution['constituency'] || !$resolution['ward']) {
-                $this->sendTelegramMessage(
+                $this->telegramNotifier->send(
                     $chatId, 
                     "⚠️ Boundary Error: Your assigned coordinates do not fall within any recognized ward or constituency bounds in our system."
                 );
@@ -139,7 +145,7 @@ class TelegramWebhookController extends Controller
 
             if ($lastRequest) {
                 $nextAllowed = $lastRequest->created_at->addHours(2)->diffForHumans();
-                $this->sendTelegramMessage($chatId, "You can only send one request every 2 hours. Next request available: {$nextAllowed}.");
+                $this->telegramNotifier->send($chatId, "You can only send one request every 2 hours. Next request available: {$nextAllowed}.");
 
                 return response()->json(['status' => 'rate_limited'], 200);
             }
@@ -184,6 +190,11 @@ class TelegramWebhookController extends Controller
 
             $urgency = $analysis['urgency'] ?? 'low';
             $matchedRequestId = $analysis['matched_request_id'] ?? null;
+            $confidence = (float) ($analysis['confidence'] ?? 0.4);
+            $status = ConstituencyRequest::statusFromConfidence($confidence);
+            $category = $analysis['category'] ?? 'General';
+
+            $mpName = $mp->mp_name ?? 'your MP';
 
             if ($matchedRequestId) {
                 $similarRequest = ConstituencyRequest::where('request_id', $matchedRequestId)
@@ -191,11 +202,47 @@ class TelegramWebhookController extends Controller
                     ->first();
 
                 if ($similarRequest) {
-                    $similarRequest->touch();
+                    $incomingWardId = $ward->ward_id ?? null;
+                    $clusterWardIds = $similarRequest->cluster_ward_ids ?? [];
+                    if (! is_array($clusterWardIds)) {
+                        $clusterWardIds = [];
+                    }
+                    if ($incomingWardId) {
+                        $clusterWardIds = array_values(array_unique(array_merge($clusterWardIds, [$incomingWardId])));
+                    }
+
+                    $similarRequest->increment('similar_count');
+                    $similarRequest->cluster_ward_ids = $clusterWardIds;
+                    $similarRequest->save();
+
+                    $count = $similarRequest->similar_count;
+                    $this->telegramNotifier->send(
+                        $chatId,
+                        "We received your report. It matches an existing issue (#{$similarRequest->request_id}) that {$count} citizens have now flagged. Forwarded to {$mpName} ({$constituency->name}, {$ward->name} Ward)."
+                    );
+                } else {
+                    $requestItem = ConstituencyRequest::create([
+                        'user_id'          => $userId,
+                        'mp_id'            => $mpId,
+                        'ward_id'          => $ward->ward_id,
+                        'raw_message'      => $rawText,
+                        'content'          => $analysis['translated_summary'] ?? $rawText,
+                        'upload_file_path' => $filePath,
+                        'file_type'        => $fileType,
+                        'urgency'          => $urgency,
+                        'category'         => $category,
+                        'confidence'       => $confidence,
+                        'status'           => $status,
+                        'similar_count'    => 1,
+                        'cluster_ward_ids'=> $ward->ward_id ? [$ward->ward_id] : [],
+                        'latitude'         => $latitude,
+                        'longitude'        => $longitude,
+                    ]);
+
+                    $this->notifyCitizenOnIngest($chatId, $requestItem, $status, $mpName, $constituency->name, $ward->name);
                 }
             } else {
-                // Save record mapped strictly to site coordinates, ward, and MP
-                ConstituencyRequest::create([
+                $requestItem = ConstituencyRequest::create([
                     'user_id'          => $userId,
                     'mp_id'            => $mpId,
                     'ward_id'          => $ward->ward_id,
@@ -204,17 +251,17 @@ class TelegramWebhookController extends Controller
                     'upload_file_path' => $filePath,
                     'file_type'        => $fileType,
                     'urgency'          => $urgency,
-                    'category'         => $analysis['category'] ?? 'General',
+                    'category'         => $category,
+                    'confidence'       => $confidence,
+                    'status'           => $status,
+                    'similar_count'    => 1,
+                    'cluster_ward_ids'=> $ward->ward_id ? [$ward->ward_id] : [],
                     'latitude'         => $latitude,
                     'longitude'        => $longitude,
                 ]);
+
+                $this->notifyCitizenOnIngest($chatId, $requestItem, $status, $mpName, $constituency->name, $ward->name);
             }
-
-            // Confirmation message response
-            $mpName = $mp->mp_name ?? 'your MP';
-            $confirmationMessage = "Your request has been forwarded to {$mpName} ({$constituency->name}, {$ward->name} Ward). You can send another request after two hours.";
-
-            $this->sendTelegramMessage($chatId, $confirmationMessage);
 
             return response()->json(['status' => 'success'], 200);
 
@@ -224,7 +271,7 @@ class TelegramWebhookController extends Controller
                 'payload' => $message,
             ]);
 
-            $this->sendTelegramMessage(
+            $this->telegramNotifier->send(
                 $chatId,
                 '⚠️ Sorry, your request failed to process due to a system error. Please try again later.'
             );
@@ -294,16 +341,37 @@ class TelegramWebhookController extends Controller
         ];
     }
 
-    private function sendTelegramMessage($chatId, $text)
-    {
-        $token = config('services.telegram.bot_token');
-        Http::post("https://api.telegram.org/bot{$token}/sendMessage", [
-            'chat_id' => $chatId,
-            'text'    => $text,
-        ]);
+    /**
+     * Confirm receipt and optional auto-categorization to the citizen.
+     */
+    private function notifyCitizenOnIngest(
+        string|int $chatId,
+        ConstituencyRequest $requestItem,
+        string $status,
+        string $mpName,
+        string $constituencyName,
+        string $wardName
+    ): void {
+        $id = $requestItem->request_id;
+        $category = $requestItem->category ?? 'General';
+        $urgency = $requestItem->urgency ?? 'low';
+
+        if ($status === ConstituencyRequest::STATUS_PENDING_REVIEW) {
+            $this->telegramNotifier->send(
+                $chatId,
+                "We received your report (#{$id}). It needs a quick human review before routing to {$mpName} ({$constituencyName}, {$wardName} Ward). We will update you shortly."
+            );
+
+            return;
+        }
+
+        $this->telegramNotifier->send(
+            $chatId,
+            "We received your report (#{$id}). Categorized as {$category} ({$urgency} urgency) and forwarded to {$mpName} ({$constituencyName}, {$wardName} Ward). You can send another request after two hours."
+        );
     }
 
-    private function downloadTelegramFile($fileId, $extension): ?string
+    private function downloadTelegramFile(string $fileId, string $extension): ?string
     {
         try {
             $token = config('services.telegram.bot_token');
