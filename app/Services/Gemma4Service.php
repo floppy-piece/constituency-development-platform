@@ -165,12 +165,6 @@ class Gemma4Service
                     'temperature'        => 0.0,
                     'max_output_tokens'  => 400,
                 ],
-                'safetySettings' => [
-                    [
-                        'category'  => 'HARM_CATEGORY_RECITATION',
-                        'threshold' => 'BLOCK_NONE',
-                    ],
-                ],
             ]);
 
             if (! $response->successful()) {
