@@ -11,6 +11,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    @vite(['resources/js/app.js'])
 </head>
 <body class="bg-slate-900 text-white font-sans min-h-screen flex flex-col justify-between">
 

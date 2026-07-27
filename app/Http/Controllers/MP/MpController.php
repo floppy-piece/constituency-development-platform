@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\MP;
 
 use App\Models\ConstituencyRequest as ConstituentRequest;
 use Illuminate\Http\JsonResponse;

@@ -1,33 +1,37 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers\Messages;
 
 use App\Http\Controllers\Controller;
-use App\Models\Constituency;
 use App\Models\ConstituencyRequest;
-use App\Models\Mp;
 use App\Models\User;
-use App\Models\Ward;
-use App\Services\GeocodingService;
 use App\Services\Gemma4Service;
+use App\Services\Telegram\TelegramLocationService;
+use App\Services\Telegram\TelegramFileService;
+use App\Services\Telegram\TelegramMessagingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
 
 class TelegramWebhookController extends Controller
 {
     protected Gemma4Service $gemmaService;
-    protected GeocodingService $geocodingService;
+    protected TelegramLocationService $locationService;
+    protected TelegramFileService $fileService;
+    protected TelegramMessagingService $messagingService;
 
-    public function __construct(Gemma4Service $gemmaService, GeocodingService $geocodingService)
-    {
+    public function __construct(
+        Gemma4Service $gemmaService, 
+        TelegramLocationService $locationService,
+        TelegramFileService $fileService,
+        TelegramMessagingService $messagingService
+    ) {
         $this->gemmaService = $gemmaService;
-        $this->geocodingService = $geocodingService;
+        $this->locationService = $locationService;
+        $this->fileService = $fileService;
+        $this->messagingService = $messagingService;
     }
 
     public function handleWebhook(Request $request)
@@ -76,7 +80,6 @@ class TelegramWebhookController extends Controller
                 if (!empty($token) && $cachedLocation) {
                     Log::info("Telegram Webhook: Found cached location for token.", $cachedLocation);
 
-                    // Explicitly update and save database columns
                     $user->forceFill([
                         'last_latitude' => $cachedLocation['latitude'],
                         'last_longitude' => $cachedLocation['longitude'],
@@ -115,7 +118,7 @@ class TelegramWebhookController extends Controller
                 return response()->json(['status' => 'location_missing'], 200);
             }
 
-            // 3. Resolve Constituency, MP, and Ward dynamically using coordinates and GeocodingService
+            // 3. Resolve Constituency, MP, and Ward dynamically using coordinates
             $resolution = $this->resolveLocationContext($latitude, $longitude, $request->ip());
             
             if (!$resolution['constituency'] || !$resolution['ward']) {
@@ -144,27 +147,8 @@ class TelegramWebhookController extends Controller
                 return response()->json(['status' => 'rate_limited'], 200);
             }
 
-            // Extract content types (Text, Image, Audio, Video)
-            $filePath = null;
-            $fileType = 'text';
-
-            if (isset($message['photo'])) {
-                $fileType = 'image';
-                $photo = end($message['photo']);
-                $filePath = $this->downloadTelegramFile($photo['file_id'], 'jpg');
-            } elseif (isset($message['voice']) || isset($message['audio'])) {
-                $fileType = 'audio';
-                $fileId = $message['voice']['file_id'] ?? $message['audio']['file_id'];
-                $filePath = $this->downloadTelegramFile($fileId, 'ogg');
-            } elseif (isset($message['video'])) {
-                $fileType = 'video';
-                $fileId = $message['video']['file_id'];
-                $filePath = $this->downloadTelegramFile($fileId, 'mp4');
-            } elseif (isset($message['video_note'])) {
-                $fileType = 'video';
-                $fileId = $message['video_note']['file_id'];
-                $filePath = $this->downloadTelegramFile($fileId, 'mp4');
-            }
+            // Extract content types via File Service
+            [$filePath, $fileType] = $this->fileService->extractAndDownloadFile($message);
 
             // Retrieve recent requests for LLM deduplication comparison
             $recentRequests = ConstituencyRequest::where('mp_id', $mpId)
@@ -178,7 +162,7 @@ class TelegramWebhookController extends Controller
                 $rawText,
                 $filePath,
                 $fileType,
-                true, // verified within boundaries via site coordinates
+                true,
                 $recentRequests
             );
 
@@ -194,7 +178,6 @@ class TelegramWebhookController extends Controller
                     $similarRequest->touch();
                 }
             } else {
-                // Save record mapped strictly to site coordinates, ward, and MP
                 ConstituencyRequest::create([
                     'user_id'          => $userId,
                     'mp_id'            => $mpId,
@@ -210,7 +193,6 @@ class TelegramWebhookController extends Controller
                 ]);
             }
 
-            // Confirmation message response
             $mpName = $mp->mp_name ?? 'your MP';
             $confirmationMessage = "Your request has been forwarded to {$mpName} ({$constituency->name}, {$ward->name} Ward). You can send another request after two hours.";
 
@@ -238,90 +220,16 @@ class TelegramWebhookController extends Controller
      */
     private function resolveLocationContext(float $latitude, float $longitude, ?string $clientIp): array
     {
-        $rawCandidates = $this->geocodingService->resolveLocationCandidates($latitude, $longitude, $clientIp);
-        
-        $cleanCandidates = collect($rawCandidates)
-            ->flatMap(fn($item) => explode(',', $item))
-            ->map(fn($item) => trim($item))
-            ->filter(fn($item) => !in_array(strtolower($item), ['kenya', 'africa', 'africa/nairobi']))
-            ->unique()
-            ->values()
-            ->all();
-
-        $constituency = null;
-
-        foreach ($cleanCandidates as $areaName) {
-            $constituency = Constituency::where('name', 'LIKE', '%' . $areaName . '%')
-                ->orWhereRaw('? LIKE CONCAT("%", name, "%")', [$areaName])
-                ->first();
-
-            if ($constituency) break;
-        }
-
-        if (!$constituency) {
-            $constituency = Constituency::select('*')
-                ->selectRaw('( 6371 * acos( cos( radians(?) ) * cos( radians( latitude ) ) * cos( radians( longitude ) - radians(?) ) + sin( radians(?) ) * sin( radians( latitude ) ) ) ) AS distance', [$latitude, $longitude, $latitude])
-                ->orderBy('distance')
-                ->first();
-        }
-
-        if (!$constituency) {
-            return ['constituency' => null, 'ward' => null, 'mp' => null];
-        }
-
-        // Find the matching ward safely using current method parameters ($latitude, $longitude)
-        $ward = DB::table('wards')
-            ->select('*')
-            ->selectRaw('(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))) AS distance', [$latitude, $longitude, $latitude])
-            ->whereRaw('(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))) <= SQRT(approximate_size / PI())', [$latitude, $longitude, $latitude])
-            ->orderBy('distance', 'asc')
-            ->first();
-
-        if (!$ward) {
-            $ward = Ward::where('constituency_id', $constituency->constituency_id ?? $constituency->id)
-                ->select('*')
-                ->selectRaw('( 6371 * acos( cos( radians(?) ) * cos( radians( latitude ) ) * cos( radians( longitude ) - radians(?) ) + sin( radians(?) ) * sin( radians( latitude ) ) ) ) AS distance', [$latitude, $longitude, $latitude])
-                ->orderBy('distance')
-                ->first();
-        }
-
-        $mp = Mp::where('constituency_name', 'LIKE', '%' . $constituency->name . '%')->first() ?? Mp::first();
-
-        return [
-            'constituency' => $constituency,
-            'ward' => $ward,
-            'mp' => $mp,
-        ];
+        return $this->locationService->resolve($latitude, $longitude, $clientIp);
     }
 
     private function sendTelegramMessage($chatId, $text)
     {
-        $token = config('services.telegram.bot_token');
-        Http::post("https://api.telegram.org/bot{$token}/sendMessage", [
-            'chat_id' => $chatId,
-            'text'    => $text,
-        ]);
+        $this->messagingService->sendMessage($chatId, $text);
     }
 
     private function downloadTelegramFile($fileId, $extension): ?string
     {
-        try {
-            $token = config('services.telegram.bot_token');
-            $response = Http::get("https://api.telegram.org/bot{$token}/getFile", ['file_id' => $fileId]);
-
-            if ($response->successful()) {
-                $telegramFilePath = $response->json('result.file_path');
-                $fileContent = Http::get("https://api.telegram.org/file/bot{$token}/{$telegramFilePath}")->body();
-
-                $fileName = 'uploads/'.$fileId.'.'.$extension;
-                Storage::disk('public')->put($fileName, $fileContent);
-
-                return 'storage/'.$fileName;
-            }
-        } catch (\Exception $e) {
-            Log::error('Telegram File Download Error: '.$e->getMessage());
-        }
-
-        return null;
+        return $this->fileService->downloadTelegramFile($fileId, $extension);
     }
 }

@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Models\Mp;
 use Illuminate\Http\Request;
-use App\Http\Controllers\MpController;
+use App\Http\Controllers\MP\MpController;
 use Illuminate\Support\Facades\Session;
 use App\Http\Controllers\LanguageController;
 

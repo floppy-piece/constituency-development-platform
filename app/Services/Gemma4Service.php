@@ -162,8 +162,14 @@ class Gemma4Service
                             'suggested_fix'
                         ],
                     ],
-                    'temperature'        => 0.1,
-                    'max_output_tokens'  => 1024, // Prevents runaway repetition loops!
+                    'temperature'        => 0.0,
+                    'max_output_tokens'  => 400,
+                ],
+                'safetySettings' => [
+                    [
+                        'category'  => 'HARM_CATEGORY_RECITATION',
+                        'threshold' => 'BLOCK_NONE',
+                    ],
                 ],
             ]);
 
@@ -294,7 +300,7 @@ class Gemma4Service
                                 'confidence_score'
                             ],
                         ],
-                        'temperature' => 0.1,
+                        'temperature' => 0.0,
                     ],
                 ]);
 

@@ -1,17 +1,15 @@
 <?php
 
-/*use App\Http\Controllers\WhatsAppWebhookController;
-Route::get('/whatsapp/webhook', [WhatsAppWebhookController::class, 'verifyWebhook']);
-Route::post('/whatsapp/webhook', [WhatsAppWebhookController::class, 'handleWebhook']);*/
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\CitizenLocationController;
-use App\Http\Controllers\Api\MpAuthController;
-use App\Http\Controllers\Api\TelegramWebhookController;
-use App\Http\Controllers\MpController;
-use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Geolocation\CitizenLocationController;
+use App\Http\Controllers\MP\MpAuthController;
+use App\Http\Controllers\MP\MpController;
+use App\Http\Controllers\MP\ProfileController;
 use App\Http\Controllers\MP\AnalyticsController;
-use App\Http\Controllers\WhatsAppWebhookController;
+use App\Http\Controllers\Messages\TelegramWebhookController;
+use App\Http\Controllers\Messages\WhatsAppWebhookController;
 
 
 // WhatsApp Webhook Endpoints

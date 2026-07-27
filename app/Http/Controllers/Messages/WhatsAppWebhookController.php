@@ -1,30 +1,35 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Messages;
 
 use App\Http\Controllers\Controller;
-use App\Models\Constituency;
 use App\Models\ConstituencyRequest;
-use App\Models\Mp;
 use App\Models\User;
 use App\Services\Gemma4Service;
-use App\Services\GeocodingService;
+use App\Services\WhatsApp\WhatsAppLocationService;
+use App\Services\WhatsApp\WhatsAppFileService;
+use App\Services\WhatsApp\WhatsAppMessagingService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class WhatsAppWebhookController extends Controller
 {
     protected Gemma4Service $gemmaService;
-    protected GeocodingService $geocodingService;
+    protected WhatsAppLocationService $locationService;
+    protected WhatsAppFileService $fileService;
+    protected WhatsAppMessagingService $messagingService;
 
-    public function __construct(Gemma4Service $gemmaService, GeocodingService $geocodingService)
-    {
+    public function __construct(
+        Gemma4Service $gemmaService,
+        WhatsAppLocationService $locationService,
+        WhatsAppFileService $fileService,
+        WhatsAppMessagingService $messagingService
+    ) {
         $this->gemmaService = $gemmaService;
-        $this->geocodingService = $geocodingService;
+        $this->locationService = $locationService;
+        $this->fileService = $fileService;
+        $this->messagingService = $messagingService;
     }
 
     /**
@@ -50,7 +55,6 @@ class WhatsAppWebhookController extends Controller
      */
     public function handleWebhook(Request $request)
     {
-        // Extract WhatsApp ID and Message Object
         $phone = $request->input('entry.0.changes.0.value.contacts.0.wa_id');
         $messageData = $request->input('entry.0.changes.0.value.messages.0');
 
@@ -59,35 +63,28 @@ class WhatsAppWebhookController extends Controller
         }
 
         try {
-            // Retrieve or create User (Citizen) based on phone number
             $user = User::firstOrCreate(
                 ['phone_number' => $phone],
                 ['whatsapp_linked_at' => now()]
             );
 
             $userId = $user->getKey();
-
-            // Extract raw text or caption payload
             $rawText = $messageData['text']['body'] ?? ($messageData['caption'] ?? '');
 
             // Location Coordinates from WhatsApp native location pin if sent directly
             $latitude = $messageData['location']['latitude'] ?? null;
             $longitude = $messageData['location']['longitude'] ?? null;
 
-            // 🔍 PARSE SYSTEM LAT/LNG PREFIX FROM TEXT (Keeps it cleanly away from Gemma 4)
+            // Parse system coordinate tags
             if ((!$latitude || !$longitude) && preg_match('/\[SYS_LOC:\s*([-\d.]+),\s*([-\d.]+)\]/i', $rawText, $matches)) {
                 $latitude = (float) $matches[1];
                 $longitude = (float) $matches[2];
-                
-                // Strip the system coordinate tag out so Gemma 4 never reads coordinate data
                 $rawText = trim(preg_replace('/\[SYS_LOC:.*?\]/i', '', $rawText));
             }
 
-            // Fallback to user's previously stored coordinates if still null
             $latitude = $latitude ?? $user->last_latitude;
             $longitude = $longitude ?? $user->last_longitude;
 
-            // Update database coordinates if successfully found
             if ($latitude && $longitude) {
                 $user->forceFill([
                     'last_latitude' => $latitude,
@@ -97,7 +94,7 @@ class WhatsAppWebhookController extends Controller
                 Log::info("WhatsApp: Updated coordinates for User ID: {$userId} -> Lat: {$latitude}, Lng: {$longitude}");
             }
 
-            // 🛑 Rate Limit Check (1 request every 2 hours)
+            // Rate Limit Check (1 request every 2 hours)
             $lastRequest = ConstituencyRequest::where('user_id', $userId)
                 ->where('created_at', '>=', now()->subHours(2))
                 ->latest()
@@ -109,35 +106,20 @@ class WhatsAppWebhookController extends Controller
                 return response()->json(['status' => 'rate_limited'], 200);
             }
 
-            // Resolve MP dynamically based on coordinates
             $assignedMp = $this->resolveMpForUser($user, $latitude, $longitude);
             $mpId = $assignedMp->mp_id ?? $assignedMp->id ?? 1;
             $ward = $this->resolveWardForCoordinates($latitude, $longitude);
             $wardId = $ward?->ward_id;
 
-            // Process File Payloads
-            $filePath = null;
-            $fileType = 'text';
+            // Process File Payloads via File Service
+            [$filePath, $fileType] = $this->downloadWhatsAppMediaPayload($messageData);
 
-            if (isset($messageData['image'])) {
-                $fileType = 'image';
-                $filePath = $this->downloadWhatsAppMedia($messageData['image']['id'], 'jpg');
-            } elseif (isset($messageData['audio'])) {
-                $fileType = 'audio';
-                $filePath = $this->downloadWhatsAppMedia($messageData['audio']['id'], 'ogg');
-            } elseif (isset($messageData['video'])) {
-                $fileType = 'video';
-                $filePath = $this->downloadWhatsAppMedia($messageData['video']['id'], 'mp4');
-            }
-
-            // Retrieve recent requests for LLM deduplication comparison
             $recentRequests = ConstituencyRequest::where('mp_id', $mpId)
                 ->where('created_at', '>=', now()->subDays(3))
                 ->latest()
                 ->take(30)
                 ->get(['request_id', 'raw_message', 'content', 'created_at']);
 
-            // 🤖 Gemma 4 Processing Engine (Receives clean text, free of coordinate strings)
             $analysis = $this->gemmaService->processRequestData(
                 $rawText,
                 $filePath,
@@ -152,7 +134,6 @@ class WhatsAppWebhookController extends Controller
             $status = ConstituencyRequest::statusFromConfidence($confidence);
             $category = $analysis['category'] ?? 'General';
 
-            // Deduplication & Creation Check with safe database defaults
             if ($matchedRequestId) {
                 $similarRequest = ConstituencyRequest::where('request_id', $matchedRequestId)
                     ->where('mp_id', $mpId)
@@ -209,7 +190,6 @@ class WhatsAppWebhookController extends Controller
                 ]);
             }
 
-            // Automated Success Response back to Citizen
             $mpName = $assignedMp->mp_name ?? 'your MP';
             $constituencyName = $assignedMp->constituency_name ?? $assignedMp->constituency ?? '';
             
@@ -240,124 +220,55 @@ class WhatsAppWebhookController extends Controller
 
     /**
      * Resolve the most likely ward based on incoming coordinates.
-     * Used to maintain real distinct ward counts inside issue clusters.
      */
     private function resolveWardForCoordinates(?float $latitude, ?float $longitude): ?object
     {
-        if (! $latitude || ! $longitude) {
-            return null;
-        }
-
-        $ward = DB::table('wards')
-            ->select('*')
-            ->selectRaw(
-                '(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))) AS distance',
-                [$latitude, $longitude, $latitude]
-            )
-            ->whereRaw(
-                '(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))) <= SQRT(approximate_size / PI())',
-                [$latitude, $longitude, $latitude]
-            )
-            ->orderBy('distance', 'asc')
-            ->first();
-
-        return $ward;
+        return $this->locationService->resolveWard($latitude, $longitude);
     }
 
     /**
-     * Dynamically match MP based on live coordinates or fallback database attributes.
+     * Dynamically match MP based on live coordinates or fallback attributes.
      */
-    private function resolveMpForUser(User $user, ?float $latitude, ?float $longitude): Mp
+    private function resolveMpForUser(User $user, ?float $latitude, ?float $longitude): object
     {
-        $lat = $latitude ?? $user->last_latitude;
-        $lng = $longitude ?? $user->last_longitude;
-
-        if ($lat && $lng) {
-            $rawCandidates = $this->geocodingService->resolveLocationCandidates($lat, $lng, null);
-            
-            $cleanCandidates = collect($rawCandidates)
-                ->flatMap(fn($item) => explode(',', $item))
-                ->map(fn($item) => trim($item))
-                ->filter(fn($item) => !in_array(strtolower($item), ['kenya', 'africa', 'africa/nairobi']))
-                ->unique()
-                ->values()
-                ->all();
-
-            foreach ($cleanCandidates as $areaName) {
-                $constituency = Constituency::where('name', 'LIKE', '%' . $areaName . '%')
-                    ->orWhereRaw('? LIKE CONCAT("%", name, "%")', [$areaName])
-                    ->first();
-
-                if ($constituency) {
-                    $mp = Mp::where('constituency_name', 'LIKE', '%' . $constituency->name . '%')->first();
-                    if ($mp) return $mp;
-                }
-            }
-        }
-
-        if (!empty($user->constituency_name)) {
-            $mp = Mp::where('constituency_name', $user->constituency_name)->first();
-            if ($mp) return $mp;
-        }
-
-        return Mp::first() ?? new Mp(['mp_id' => 1, 'mp_name' => 'Default MP']);
+        return $this->locationService->resolveMp($user, $latitude, $longitude);
     }
 
     /**
-     * Automated WhatsApp Outbound Message Dispatcher with Error Logging
+     * Automated WhatsApp Outbound Message Dispatcher
      */
     private function sendWhatsAppMessage(string $to, string $text): void
     {
-        $token = config('services.whatsapp.access_token');
-        $phoneId = config('services.whatsapp.phone_number_id');
-        $version = config('services.whatsapp.version', 'v21.0');
-
-        try {
-            $response = Http::withToken($token)
-                ->post("https://graph.facebook.com/{$version}/{$phoneId}/messages", [
-                    'messaging_product' => 'whatsapp',
-                    'to'                => $to,
-                    'type'              => 'text',
-                    'text'              => ['body' => $text]
-                ]);
-
-            if (!$response->successful()) {
-                Log::error("Meta WhatsApp Outbound Error Response for {$to}: " . $response->body());
-            }
-        } catch (\Exception $e) {
-            Log::error("Failed to send outbound WhatsApp message to {$to}: " . $e->getMessage());
-        }
+        $this->messagingService->sendMessage($to, $text);
     }
 
     /**
-     * Download WhatsApp Media (2-Step Meta Graph API Flow)
+     * Download WhatsApp Media wrapper
      */
     private function downloadWhatsAppMedia(string $mediaId, string $extension): ?string 
     {
-        try {
-            $token = config('services.whatsapp.access_token');
-            $version = config('services.whatsapp.version', 'v21.0');
+        return $this->fileService->downloadMedia($mediaId, $extension);
+    }
 
-            $mediaResponse = Http::withToken($token)
-                ->get("https://graph.facebook.com/{$version}/{$mediaId}");
+    /**
+     * Internal helper to extract file type payload from message array
+     */
+    private function downloadWhatsAppMediaPayload(array $messageData): array
+    {
+        $filePath = null;
+        $fileType = 'text';
 
-            if (!$mediaResponse->successful()) {
-                Log::error("Failed to fetch media metadata for ID: {$mediaId}");
-                return null;
-            }
-
-            $downloadUrl = $mediaResponse->json('url');
-            $fileResponse = Http::withToken($token)->get($downloadUrl);
-
-            if ($fileResponse->successful()) {
-                $fileName = "uploads/" . $mediaId . "." . $extension;
-                Storage::disk('public')->put($fileName, $fileResponse->body());
-                return "storage/" . $fileName;
-            }
-        } catch (\Exception $e) {
-            Log::error("WhatsApp Media Download Error: " . $e->getMessage());
+        if (isset($messageData['image'])) {
+            $fileType = 'image';
+            $filePath = $this->downloadWhatsAppMedia($messageData['image']['id'], 'jpg');
+        } elseif (isset($messageData['audio'])) {
+            $fileType = 'audio';
+            $filePath = $this->downloadWhatsAppMedia($messageData['audio']['id'], 'ogg');
+        } elseif (isset($messageData['video'])) {
+            $fileType = 'video';
+            $filePath = $this->downloadWhatsAppMedia($messageData['video']['id'], 'mp4');
         }
 
-        return null;
+        return [$filePath, $fileType];
     }
 }
