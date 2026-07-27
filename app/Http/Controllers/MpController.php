@@ -273,41 +273,123 @@ class MpController extends Controller
 
         $mpId = $mp->mp_id ?? $mp->id;
 
-        // Fetch requests that have latitude & longitude coordinates
-        $requests = ConstituentRequest::where('mp_id', $mpId)
-            ->whereNotNull('latitude')
-            ->whereNotNull('longitude')
+        $requests = ConstituentRequest::with('ward:ward_id,name,latitude,longitude')
+            ->where('mp_id', $mpId)
+            ->where('status', '!=', ConstituentRequest::STATUS_RESOLVED)
             ->get();
 
-        $features = $requests->map(function ($item) {
-            // Determine map weight based on urgency and recurring reports count
-            $weight = match (strtolower($item->urgency ?? 'low')) {
+        $features = [];
+        $heatPoints = [];
+        $highUrgency = 0;
+        $withCoords = 0;
+
+        foreach ($requests as $item) {
+            $lat = (float) ($item->latitude ?? 0);
+            $lng = (float) ($item->longitude ?? 0);
+
+            // WhatsApp sometimes stores 0,0 — fall back to ward centroid when available
+            $coordSource = 'gps';
+            if (abs($lat) < 0.0001 && abs($lng) < 0.0001) {
+                if ($item->ward && $item->ward->latitude && $item->ward->longitude) {
+                    $lat = (float) $item->ward->latitude;
+                    $lng = (float) $item->ward->longitude;
+                    $coordSource = 'ward_centroid';
+                } else {
+                    continue;
+                }
+            }
+
+            $reportsCount = max(1, (int) ($item->similar_count ?? 1));
+            $urgency = strtolower($item->urgency ?? 'low');
+            $weight = match ($urgency) {
                 'high' => 3,
                 'medium' => 2,
                 default => 1,
-            } * max(1, (int) ($item->similar_count ?? 1));
+            } * $reportsCount;
 
-            return [
+            $intensity = min(10, $weight);
+            if ($urgency === 'high') {
+                $highUrgency++;
+            }
+            $withCoords++;
+
+            // Leaflet.heat expects [lat, lng, intensity 0–1]
+            $heatPoints[] = [
+                $lat,
+                $lng,
+                max(0.2, min(1.0, $intensity / 10)),
+            ];
+
+            $features[] = [
                 'type' => 'Feature',
                 'geometry' => [
                     'type' => 'Point',
-                    'coordinates' => [(float) $item->longitude, (float) $item->latitude],
+                    'coordinates' => [$lng, $lat],
                 ],
                 'properties' => [
                     'request_id' => $item->request_id,
                     'summary' => $item->content,
                     'category' => $item->category ?? 'General',
                     'urgency' => $item->urgency,
-                    'reports_count' => max(1, (int) ($item->similar_count ?? 1)),
-                    'heatmap_intensity' => min(10, $weight),
+                    'status' => $item->status,
+                    'ward_name' => $item->ward?->name,
+                    'reports_count' => $reportsCount,
+                    'heatmap_intensity' => $intensity,
+                    'coord_source' => $coordSource,
                     'created_at' => $item->created_at ? $item->created_at->toIso8601String() : null,
                 ],
             ];
-        });
+        }
+
+        // Ward-level aggregates strengthen the heatmap narrative even with sparse GPS
+        $wardHeat = ConstituentRequest::query()
+            ->where('mp_id', $mpId)
+            ->where('status', '!=', ConstituentRequest::STATUS_RESOLVED)
+            ->whereNotNull('ward_id')
+            ->join('wards', 'requests.ward_id', '=', 'wards.ward_id')
+            ->select(
+                'wards.ward_id',
+                'wards.name as ward_name',
+                'wards.latitude',
+                'wards.longitude',
+                DB::raw('count(requests.request_id) as total_requests'),
+                DB::raw("sum(case when requests.urgency = 'high' then 1 else 0 end) as high_urgency_count"),
+                DB::raw('coalesce(sum(requests.similar_count), count(requests.request_id)) as report_weight')
+            )
+            ->groupBy('wards.ward_id', 'wards.name', 'wards.latitude', 'wards.longitude')
+            ->get()
+            ->map(function ($ward) {
+                $total = max(1, (int) $ward->total_requests);
+                $high = (int) $ward->high_urgency_count;
+                $weight = max(1, (int) $ward->report_weight);
+                $intensity = min(1.0, ($weight / max(1, $total)) * (0.35 + ($high / $total) * 0.65));
+
+                return [
+                    'ward_id' => $ward->ward_id,
+                    'ward_name' => $ward->ward_name,
+                    'latitude' => (float) $ward->latitude,
+                    'longitude' => (float) $ward->longitude,
+                    'total_requests' => $total,
+                    'high_urgency_count' => $high,
+                    'heat' => [
+                        (float) $ward->latitude,
+                        (float) $ward->longitude,
+                        max(0.25, $intensity),
+                    ],
+                ];
+            })
+            ->values();
 
         return response()->json([
             'type' => 'FeatureCollection',
             'features' => $features,
+            'heat_points' => $heatPoints,
+            'ward_heat' => $wardHeat,
+            'meta' => [
+                'mapped_requests' => $withCoords,
+                'high_urgency_mapped' => $highUrgency,
+                'ward_clusters' => $wardHeat->count(),
+            ],
         ]);
     }
 
