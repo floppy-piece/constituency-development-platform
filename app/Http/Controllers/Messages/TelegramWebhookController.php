@@ -148,7 +148,7 @@ class TelegramWebhookController extends Controller
             }
 
             // Extract content types via File Service
-            [$filePath, $fileType] = $this->fileService->extractAndDownloadFile($message);
+            [$filePath, $fileType] = $this->fileService->downloadTelegramFile($message);
 
             // Retrieve recent requests for LLM deduplication comparison
             $recentRequests = ConstituencyRequest::where('mp_id', $mpId)
