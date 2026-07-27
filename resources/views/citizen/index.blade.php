@@ -185,7 +185,7 @@
                                     console.error('Failed to bind location token for Telegram:', e);
                                 }
 
-                                this.whatsappUrl = `https://wa.me/{{ config('services.whatsapp.display_number') }}?text=` + encodeURIComponent(`[SYS_LOC:${this.lat},${this.lng}]\nHello, I would like to submit a constituency request:\n `);
+                                this.whatsappUrl = `https://wa.me/{{ config('services.whatsapp.display_number') }}?text=` + encodeURIComponent(`[SYS_LOC:${this.lat},${this.lng}]\n\n `);
                                 this.locationCaptured = true;
                                 this.loading = false;
                                 

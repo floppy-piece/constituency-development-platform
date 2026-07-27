@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Services\ProposalScoringService;
 use App\Models\ConstituencyFacility;
+use App\Http\Controllers\Controller;
 
 
 class MpController extends Controller

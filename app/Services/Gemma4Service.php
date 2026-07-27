@@ -163,7 +163,9 @@ class Gemma4Service
                         ],
                     ],
                     'temperature'        => 0.0,
-                    'max_output_tokens'  => 400,
+                    'max_output_tokens'  => 800,
+                    'presence_penalty'   => 1.0,  
+                    'frequency_penalty'  => 1.0,
                 ],
             ]);
 
@@ -294,7 +296,10 @@ class Gemma4Service
                                 'confidence_score'
                             ],
                         ],
-                        'temperature' => 0.0,
+                        'temperature'        => 0.0,
+                        'max_output_tokens'  => 800,
+                        'presence_penalty'   => 1.0,  
+                        'frequency_penalty'  => 1.0,
                     ],
                 ]);
 
