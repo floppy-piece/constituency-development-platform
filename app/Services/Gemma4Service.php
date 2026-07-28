@@ -69,11 +69,10 @@ class Gemma4Service
                         . "   - Score 0-3: 'low'\n"
                         . "   - Score 4-7: 'medium'\n"
                         . "   - Score 8-10: 'high'\n"
-                        . "6. Provide a rigorous step-by-step evaluation thought process in `evaluation_thoughts` and formulate a concrete, actionable technical/administrative remediation plan in `suggested_fix`.\n"
+                        . "6. Provide a concise, brief step-by-step evaluation thought process in `evaluation_thoughts` (under 15 words, NO repetitive loops like 'way-of-life/impactful') and formulate a concrete technical remediation plan in `suggested_fix`.\n"
                         . "7. Compare the submission to existing requests. If it semantically matches an existing issue, return that integer ID in 'matched_request_id'. Otherwise return null.\n"
                         . "8. Assign a `category` such as Roads, Water, Education, Health, Security, Sanitation, Electricity, or General.\n"
-                        . "9. Provide a `confidence` score from 0.0 to 1.0 reflecting how sure you are about category, urgency, and any dedup match. "
-                        . "Use lower confidence (below 0.7) when language is ambiguous, media is unclear, location/context is missing, or the match is uncertain.\n\n"
+                        . "9. Provide a `confidence` score from 0.0 to 1.0 reflecting how sure you are about category, urgency, and any dedup match.\n\n"
                         . "Your response MUST be a valid JSON object with the following keys:\n"
                         . "{\n"
                         . "  \"translated_summary\": \"string\",\n"
@@ -81,8 +80,8 @@ class Gemma4Service
                         . "  \"urgency_score\": integer (0-10),\n"
                         . "  \"urgency\": \"string (low, medium, high)\",\n"
                         . "  \"confidence\": number (0.0 to 1.0),\n"
-                        //. "  \"evaluation_thoughts\": \"string (detailing cost, time, and inaction effects)\",\n"
-                        . "  \"suggested_fix\": \"string (actionable government fix)\",\n"
+                        . "  \"evaluation_thoughts\": \"string\",\n"
+                        . "  \"suggested_fix\": \"string\",\n"
                         . "  \"matched_request_id\": integer or null\n"
                         . "}\n\n"
                         . "EXISTING REQUESTS:\n"
@@ -162,8 +161,9 @@ class Gemma4Service
                             'suggested_fix'
                         ],
                     ],
-                    'temperature'        => 0.0,
+                    'temperature'        => 0.2,
                     'max_output_tokens'  => 400,
+                    'frequency_penalty'  => 0.5,
                 ],
             ]);
 
@@ -294,8 +294,9 @@ class Gemma4Service
                                 'confidence_score'
                             ],
                         ],
-                        'temperature'        => 0.0,
+                        'temperature'        => 0.2,
                         'max_output_tokens'  => 400,
+                        'frequency_penalty'  => 0.5,
                     ],
                 ]);
 
@@ -432,10 +433,15 @@ class Gemma4Service
 
     /**
      * Robust extraction method handling valid JSON, markdown codeblocks,
-     * and fallback regex parsing for pseudo-JSON bullet outputs.
+     * slash repetition loops, and fallback regex parsing for pseudo-JSON outputs.
      */
     private function extractJson(string $text): ?array
     {
+        // Clean out infinite slash/dash repetition loops (e.g. "way-of-life/impactful/impactful...")
+        $text = preg_replace('/(-is)+/i', '', $text);
+        $text = preg_replace('/(\b[A-Za-z]+[-/]){3,}\b[A-Za-z]+/i', '', $text);
+        $text = preg_replace('/(\b[A-Za-z]+\b)(\/\1){2,}/i', '$1', $text);
+
         // 1. Direct JSON parse
         $direct = json_decode($text, true);
         if (is_array($direct)) {
@@ -449,33 +455,55 @@ class Gemma4Service
             return $cleanedResult;
         }
 
-        // 3. Locate valid JSON braces {...} inside raw text
-        if (preg_match_all('/\{[\s\S]*?\}/', $text, $matches)) {
-            foreach (array_reverse($matches[0]) as $jsonCandidate) {
-                $decoded = json_decode($jsonCandidate, true);
-                if (is_array($decoded) && (isset($decoded['translated_summary']) || isset($decoded['recommended_winner']))) {
-                    return $decoded;
-                }
+        // 3. Locate valid JSON braces {...} inside raw text (handles cut-off JSON)
+        if (preg_match('/\{[\s\S]*\}/', $text, $matches)) {
+            $jsonCandidate = $matches[0];
+            $decoded = json_decode($jsonCandidate, true);
+            if (is_array($decoded) && (isset($decoded['translated_summary']) || isset($decoded['recommended_winner']))) {
+                return $decoded;
+            }
+            
+            // Attempt recovery if JSON was cut off at the end due to token limits
+            $fixedJson = rtrim(trim($jsonCandidate), ',') . '}';
+            $fixedDecoded = json_decode($fixedJson, true);
+            if (is_array($fixedDecoded) && (isset($fixedDecoded['translated_summary']) || isset($fixedDecoded['recommended_winner']))) {
+                return $fixedDecoded;
             }
         }
 
-        // 4. Fallback parser: Extract key-value pairs formatted as bullet points (* `key`: "value")
+        // 4. Fallback parser: Extract key-value pairs formatted as key-value pairs or raw matches
         $extracted = [];
 
-        if (preg_match('/translated_summary[`\s]*:[\s]*"([^"]+)"/i', $text, $matchSummary)) {
+        if (preg_match('/(?:["`])?translated_summary(?:["`])?[\s]*:[\s]*"([^"]+)"/i', $text, $matchSummary)) {
             $extracted['translated_summary'] = $matchSummary[1];
         }
 
-        if (preg_match('/urgency[`\s]*:[\s]*"?(low|medium|high)"?/i', $text, $matchUrgency)) {
+        if (preg_match('/(?:["`])?urgency(?:["`])?[\s]*:[\s]*"?(low|medium|high)"?/i', $text, $matchUrgency)) {
             $extracted['urgency'] = strtolower($matchUrgency[1]);
         }
 
-        if (preg_match('/matched_request_id[`\s]*:[\s]*(null|\d+)/i', $text, $matchId)) {
+        if (preg_match('/(?:["`])?urgency_score(?:["`])?[\s]*:[\s]*(\d+)/i', $text, $matchScore)) {
+            $extracted['urgency_score'] = (int) $matchScore[1];
+        }
+
+        if (preg_match('/(?:["`])?category(?:["`])?[\s]*:[\s]*"([^"]+)"/i', $text, $matchCat)) {
+            $extracted['category'] = $matchCat[1];
+        }
+
+        if (preg_match('/(?:["`])?matched_request_id(?:["`])?[\s]*:[\s]*(null|\d+)/i', $text, $matchId)) {
             $extracted['matched_request_id'] = $matchId[1] === 'null' ? null : (int) $matchId[1];
         }
 
         if (! empty($extracted) && isset($extracted['translated_summary'])) {
-            return $extracted;
+            return array_merge([
+                'category'            => 'General',
+                'urgency_score'       => 5,
+                'urgency'             => 'medium',
+                'confidence'          => 0.7,
+                'evaluation_thoughts' => 'Recovered from truncated AI stream.',
+                'suggested_fix'       => 'Inspect and resolve reported issue.',
+                'matched_request_id'  => null,
+            ], $extracted);
         }
 
         return null;
