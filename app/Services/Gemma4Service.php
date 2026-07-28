@@ -435,10 +435,9 @@ class Gemma4Service
      */
     private function extractJson(string $text): ?array
     {
-        // Clean out infinite slash/dash repetition loops (e.g. "way-of-life/impactful/impactful...")
+        // Clean out infinite slash/dash repetition loops safely
         $text = preg_replace('/(-is)+/i', '', $text);
-        $text = preg_replace('/(\b[A-Za-z]+[-/]){3,}\b[A-Za-z]+/i', '', $text);
-        $text = preg_replace('/(\b[A-Za-z]+\b)(\/\1){2,}/i', '$1', $text);
+        $text = preg_replace('/(\b[A-Za-z0-9\-_]+[\/\-]){3,}[A-Za-z0-9\-_]+/i', '', $text);
 
         // 1. Direct JSON parse
         $direct = json_decode($text, true);
