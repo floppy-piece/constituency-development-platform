@@ -238,16 +238,12 @@ class Gemma4Service
         }
 
         $systemPrompt = "You are an expert AI Public Sector Planning & Infrastructure Policy Advisor for Kenya.\n"
-            . "Your task is to analyze and compare two competing constituent proposal requests submitted to a Member of Parliament (MP).\n"
-            . "Even if both appear urgent, you MUST rigorously differentiate them and determine a definitive higher-priority winner.\n"
-            . "Evaluate both proposals comprehensively using all available data points and contextual metrics, including:\n"
-            . "1. Citizen Demand & Volume of complaints/requests.\n"
-            . "2. Physical Infrastructure Deficit (Enrollment vs Capacity overcrowding, travel distance).\n"
-            . "3. Demographic Vulnerability & Poverty Index Score.\n"
-            . "4. Estimated Financial/Budgetary impact and implementation Period.\n"
-            . "5. Critical consequences and compounding risks if left unaddressed immediately.\n"
-            . "6. Alignment with County Integrated Development Plans (CIDP).\n"
-            . "Provide a concrete, actionable `suggested_fix` for how the constituency development team should resolve the winning proposal.";
+            . "Your task is to independently analyze, evaluate, and compare two competing constituent proposals submitted to an MP.\n"
+            . "You must perform your own complete evaluation from scratch:\n"
+            . "1. Analyze the urgency, public safety risks, community impact, and severity of each proposal.\n"
+            . "2. Predict and estimate the expected financial implementation costs (in Kenyan Shillings - KES) and required implementation timelines for each proposal based on their infrastructure scope.\n"
+            . "3. Rigorously contrast them, decide which proposal is definitively more urgent/critical to prioritize, and select the winning proposal ('proposal_a' or 'proposal_b').\n"
+            . "4. Assign standalone priority scores from 0 to 100 for both proposals based purely on your qualitative and quantitative judgment.";
 
         $payload = [
             'proposal_a' => $proposalA,
@@ -258,8 +254,8 @@ class Gemma4Service
 
         try {
             $response = Http::withHeaders(['Content-Type' => 'application/json'])
-                ->timeout(45)
-                ->connectTimeout(15)
+                ->timeout(60)
+                ->connectTimeout(20)
                 ->post($url, [
                     'system_instruction' => [
                         'parts' => [['text' => $systemPrompt]],
@@ -272,72 +268,87 @@ class Gemma4Service
                         'response_schema'    => [
                             'type' => 'OBJECT',
                             'properties' => [
-                                'recommended_winner' => [
-                                    'type' => 'STRING',
-                                    'enum' => ['proposal_a', 'proposal_b']
-                                ],
-                                'score_proposal_a'   => ['type' => 'INTEGER'],
-                                'score_proposal_b'   => ['type' => 'INTEGER'],
-                                'ai_reasoning'       => ['type' => 'STRING'],
-                                'trade_off_analysis' => ['type' => 'STRING'],
-                                'suggested_fix'      => ['type' => 'STRING'],
-                                'confidence_score'   => ['type' => 'INTEGER'],
+                                'recommended_winner'       => ['type' => 'STRING', 'enum' => ['proposal_a', 'proposal_b']],
+                                'score_proposal_a'         => ['type' => 'INTEGER'],
+                                'score_proposal_b'         => ['type' => 'INTEGER'],
+                                'predicted_budget_a'       => ['type' => 'STRING'],
+                                'predicted_budget_b'       => ['type' => 'STRING'],
+                                'predicted_timeline_a'     => ['type' => 'STRING'],
+                                'predicted_timeline_b'     => ['type' => 'STRING'],
+                                'ai_reasoning'             => ['type' => 'STRING'],
+                                'trade_off_analysis'       => ['type' => 'STRING'],
+                                'suggested_fix'            => ['type' => 'STRING'],
+                                'confidence_score'         => ['type' => 'INTEGER'],
                             ],
                             'required' => [
                                 'recommended_winner', 
                                 'score_proposal_a', 
                                 'score_proposal_b', 
+                                'predicted_budget_a',
+                                'predicted_budget_b',
+                                'predicted_timeline_a',
+                                'predicted_timeline_b',
                                 'ai_reasoning', 
                                 'trade_off_analysis', 
                                 'suggested_fix', 
                                 'confidence_score'
                             ],
                         ],
-                        'temperature'        => 0.2,
-                        'max_output_tokens'  => 400,
+                        'temperature'        => 0.3,
+                        'max_output_tokens'  => 800,
                     ],
                 ]);
 
             if ($response->successful()) {
+                implementation_json:
                 $rawText = $response->json('candidates.0.content.parts.0.text') ?? '{}';
                 $parsed = $this->extractJson($rawText);
 
                 if (is_array($parsed)) {
+                    Log::info("Gemma 4 Autonomous Policy & Expense Evaluation Successful", [
+                        'winner' => $parsed['recommended_winner'] ?? 'unknown',
+                        'score_a' => $parsed['score_proposal_a'] ?? 'N/A',
+                        'score_b' => $parsed['score_proposal_b'] ?? 'N/A',
+                    ]);
+
                     return [
-                        'recommended_winner' => $parsed['recommended_winner'] ?? 'proposal_a',
-                        'score_proposal_a'   => (int) ($parsed['score_proposal_a'] ?? 50),
-                        'score_proposal_b'   => (int) ($parsed['score_proposal_b'] ?? 50),
-                        'ai_reasoning'       => $parsed['ai_reasoning'] ?? 'Decision evaluated by Gemma 4.',
-                        'trade_off_analysis' => $parsed['trade_off_analysis'] ?? 'N/A',
-                        'suggested_fix'      => $parsed['suggested_fix'] ?? 'N/A',
-                        'confidence_score'   => (int) ($parsed['confidence_score'] ?? 80),
+                        'recommended_winner'   => $parsed['recommended_winner'] ?? 'proposal_a',
+                        'score_proposal_a'     => (int) ($parsed['score_proposal_a'] ?? 50),
+                        'score_proposal_b'     => (int) ($parsed['score_proposal_b'] ?? 50),
+                        'predicted_budget_a'   => $parsed['predicted_budget_a'] ?? 'Ksh 2,000,000',
+                        'predicted_budget_b'   => $parsed['predicted_budget_b'] ?? 'Ksh 1,500,000',
+                        'predicted_timeline_a' => $parsed['predicted_timeline_a'] ?? '2 Months',
+                        'predicted_timeline_b' => $parsed['predicted_timeline_b'] ?? '1 Month',
+                        'ai_reasoning'         => $parsed['ai_reasoning'] ?? 'Autonomous evaluation completed by Gemma 4.',
+                        'trade_off_analysis'   => $parsed['trade_off_analysis'] ?? 'N/A',
+                        'suggested_fix'        => $parsed['suggested_fix'] ?? 'N/A',
+                        'confidence_score'     => (int) ($parsed['confidence_score'] ?? 85),
                     ];
                 }
             } else {
-                Log::error("Gemma 4 Proposal Comparison Error ({$response->status()}): " . $response->body());
+                Log::error("Gemma 4 Evaluation HTTP Error ({$response->status()}): " . $response->body());
             }
         } catch (Throwable $e) {
-            Log::warning("Gemma 4 API Timeout/Exception encountered: " . $e->getMessage() . ". Falling back to algorithmic score evaluation.");
+            Log::warning("Gemma 4 API Exception: " . $e->getMessage());
         }
 
-        // Graceful algorithmic fallback when timeout occurs
-        return $this->fallbackEvaluation($proposalA, $proposalB, 'API Timeout / Network unreachable. Evaluated via base matrix scoring.');
+        return $this->fallbackEvaluation($proposalA, $proposalB, 'API Connection failure.');
     }
 
     private function fallbackEvaluation(array $proposalA, array $proposalB, string $reason): array
     {
-        $scoreA = $proposalA['base_score'] ?? 50;
-        $scoreB = $proposalB['base_score'] ?? 50;
-        $winner = $scoreA >= $scoreB ? 'proposal_a' : 'proposal_b';
-
         return [
-            'recommended_winner' => $winner,
-            'score_proposal_a'   => (int) $scoreA,
-            'score_proposal_b'   => (int) $scoreB,
-            'ai_reasoning'       => "Fallback Mode: {$reason} Winner determined by weighted infrastructure and citizen demand metrics.",
-            'trade_off_analysis' => 'Proposal A balances broader citizen report volume against Proposal B metrics.',
-            'suggested_fix'      => 'Deploy phased resource allocation prioritizing the facility with higher overcrowding ratios and CIDP alignment.',
-            'confidence_score'   => 60,
+            'recommended_winner'   => 'proposal_a',
+            'score_proposal_a'     => 50,
+            'score_proposal_b'     => 50,
+            'predicted_budget_a'   => 'Ksh 2,000,000',
+            'predicted_budget_b'   => 'Ksh 1,500,000',
+            'predicted_timeline_a' => '2 Months',
+            'predicted_timeline_b' => '1 Month',
+            'ai_reasoning'         => "Fallback Mode: {$reason} Defaulting baseline comparison.",
+            'trade_off_analysis'   => 'N/A',
+            'suggested_fix'        => 'Review details manually.',
+            'confidence_score'     => 50,
         ];
     }
 

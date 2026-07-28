@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\ConstituencyFacility;
 use App\Models\ConstituencyRequest;
+use App\Services\Gemma4Service;
+use Illuminate\Support\Facades\Log;
 
 class ProposalScoringService
 {
@@ -15,128 +17,75 @@ class ProposalScoringService
     }
 
     /**
-     * Compute objective Priority Score (0 - 100) combining Citizen Feedback, Infrastructure Gaps, 
-     * Demographics, and County Development Plan (CIDP) alignment.
-     */
-    public function calculatePriorityScore(ConstituencyRequest $request, ?ConstituencyFacility $facility = null): float
-    {
-        // 1. Citizen Demand Weight (0 - 30 points)
-        $reportCount = $request->similarity_hash ?? 1;
-        $demandScore = min(30, $reportCount * 3); 
-
-        // 2. Urgency Weight (0 - 15 points)
-        $urgencyScore = match (strtolower($request->urgency ?? 'low')) {
-            'high' => 15,
-            'medium' => 8,
-            default => 3,
-        };
-
-        // 3. Infrastructure Deficit Metrics Weight (0 - 25 points)
-        $infrastructureScore = 0;
-        if ($facility) {
-            // Overcrowding / Deficit factor (up to 15 pts)
-            if ($facility->current_capacity > 0) {
-                $overcrowdingRatio = ($facility->current_enrollment / $facility->current_capacity);
-                if ($overcrowdingRatio > 1.0) {
-                    $infrastructureScore += min(15, ($overcrowdingRatio - 1) * 15);
-                }
-            }
-
-            // Travel Distance factor (up to 10 pts)
-            $distanceKm = $facility->avg_travel_distance_km ?? 0;
-            $infrastructureScore += min(10, ($distanceKm / 10) * 10);
-        } else {
-            $infrastructureScore = 10;
-        }
-
-        // 4. Demographic Vulnerability Score (0 - 15 points)
-        $demographicsScore = 0;
-        if ($facility) {
-            // Higher poverty score increases priority
-            $povertyScore = $facility->poverty_index_score ?? 50.0;
-            $demographicsScore = ($povertyScore / 100) * 15;
-        } else {
-            $demographicsScore = 7.5;
-        }
-
-        // 5. Local Development Plan (CIDP) Alignment Weight (0 - 15 points)
-        $cidpScore = 0;
-        if ($facility && $facility->is_in_cidp_plan) {
-            $cidpScore = match (strtolower($facility->cidp_priority_tier ?? 'medium')) {
-                'high' => 15,
-                'medium' => 10,
-                'low' => 5,
-                default => 5,
-            };
-        }
-
-        $totalScore = $demandScore + $urgencyScore + $infrastructureScore + $demographicsScore + $cidpScore;
-
-        return min(100.0, round($totalScore, 2));
-    }
-
-    /**
-     * Compare two competing project proposals side-by-side using calculated metrics and Gemma 4 AI intelligence.
+     * Compare two competing project proposals side-by-side. 
+     * Gemma 4 handles all urgency ranking, cost/expense predictions, and trade-off evaluations natively.
      */
     public function compareProposals(int $requestIdA, int $requestIdB): array
     {
-        $reqA = ConstituencyRequest::with(['facility', 'mp'])->findOrFail($requestIdA);
-        $reqB = ConstituencyRequest::with(['facility', 'mp'])->findOrFail($requestIdB);
+        $reqA = ConstituencyRequest::with(['facility', 'mp'])->where('request_id', $requestIdA)->firstOrFail();
+        $reqB = ConstituencyRequest::with(['facility', 'mp'])->where('request_id', $requestIdB)->firstOrFail();
 
-        $baseScoreA = $this->calculatePriorityScore($reqA, $reqA->facility);
-        $baseScoreB = $this->calculatePriorityScore($reqB, $reqB->facility);
-
-        // Build data payloads for Gemma 4 evaluation
+        // Feed raw operational context to Gemma 4 without pre-calculated app metrics or hardcoded budgets
         $proposalAData = [
-            'request_id' => $reqA->request_id,
-            'title' => $reqA->content,
-            'category' => $reqA->category ?? 'General',
-            'urgency' => $reqA->urgency,
-            'citizen_reports' => $reqA->similarity_hash ?? 1,
-            'facility_name' => $reqA->facility?->facility_name ?? 'N/A',
-            'enrollment' => $reqA->facility?->current_enrollment ?? 'N/A',
-            'capacity' => $reqA->facility?->current_capacity ?? 'N/A',
-            'avg_travel_distance_km' => $reqA->facility?->avg_travel_distance_km ?? 'N/A',
-            'is_in_cidp_plan' => $reqA->facility?->is_in_cidp_plan ?? false,
-            'poverty_index_score' => $reqA->facility?->poverty_index_score ?? 'N/A',
-            'estimated_budget_kes' => 'Ksh 2,500,000',
-            'implementation_period' => '3 Months',
-            'base_score' => $baseScoreA,
+            'request_id'             => $reqA->request_id,
+            'title'                  => $reqA->content ?? $reqA->raw_message ?? 'N/A',
+            'category'               => $reqA->category ?? 'General',
+            'declared_urgency'       => strtolower($reqA->urgency ?? 'low'),
+            'citizen_reports_count'  => (int) ($reqA->similarity_hash ?? 1),
+            'facility_name'          => $reqA->facility?->facility_name ?? 'N/A',
+            'current_enrollment'     => $reqA->facility?->current_enrollment ?? 0,
+            'current_capacity'       => $reqA->facility?->current_capacity ?? 0,
+            'avg_travel_distance_km' => $reqA->facility?->avg_travel_distance_km ?? 0.0,
+            'is_in_cidp_plan'        => (bool) ($reqA->facility?->is_in_cidp_plan ?? false),
+            'poverty_index_score'    => $reqA->facility?->poverty_index_score ?? 50.0,
         ];
 
         $proposalBData = [
-            'request_id' => $reqB->request_id,
-            'title' => $reqB->content,
-            'category' => $reqB->category ?? 'General',
-            'urgency' => $reqB->urgency,
-            'citizen_reports' => $reqB->similarity_hash ?? 1,
-            'facility_name' => $reqB->facility?->facility_name ?? 'N/A',
-            'enrollment' => $reqB->facility?->current_enrollment ?? 'N/A',
-            'capacity' => $reqB->facility?->current_capacity ?? 'N/A',
-            'avg_travel_distance_km' => $reqB->facility?->avg_travel_distance_km ?? 'N/A',
-            'is_in_cidp_plan' => $reqB->facility?->is_in_cidp_plan ?? false,
-            'poverty_index_score' => $reqB->facility?->poverty_index_score ?? 'N/A',
-            'estimated_budget_kes' => 'Ksh 1,800,000',
-            'implementation_period' => '6 Weeks',
-            'base_score' => $baseScoreB,
+            'request_id'             => $reqB->request_id,
+            'title'                  => $reqB->content ?? $reqB->raw_message ?? 'N/A',
+            'category'               => $reqB->category ?? 'General',
+            'declared_urgency'       => strtolower($reqB->urgency ?? 'low'),
+            'citizen_reports_count'  => (int) ($reqB->similarity_hash ?? 1),
+            'facility_name'          => $reqB->facility?->facility_name ?? 'N/A',
+            'current_enrollment'     => $reqB->facility?->current_enrollment ?? 0,
+            'current_capacity'       => $reqB->facility?->current_capacity ?? 0,
+            'avg_travel_distance_km' => $reqB->facility?->avg_travel_distance_km ?? 0.0,
+            'is_in_cidp_plan'        => (bool) ($reqB->facility?->is_in_cidp_plan ?? false),
+            'poverty_index_score'    => $reqB->facility?->poverty_index_score ?? 50.0,
         ];
 
-        // Pass proposal payloads to Gemma 4 for rigorous policy and risk evaluation
+        // Fully invoke Gemma 4 to autonomously compute expenses, timelines, scores, and winning priority
         $aiEvaluation = $this->gemmaService->evaluateAndCompareProposals($proposalAData, $proposalBData);
 
-        $scoreA = $aiEvaluation['score_proposal_a'] ?? $baseScoreA;
-        $scoreB = $aiEvaluation['score_proposal_b'] ?? $baseScoreB;
+        $scoreA = (int) ($aiEvaluation['score_proposal_a'] ?? 50);
+        $scoreB = (int) ($aiEvaluation['score_proposal_b'] ?? 50);
         $winner = $aiEvaluation['recommended_winner'] ?? ($scoreA >= $scoreB ? 'proposal_a' : 'proposal_b');
 
-        return [
-            'proposal_a' => array_merge($proposalAData, ['score' => $scoreA]),
-            'proposal_b' => array_merge($proposalBData, ['score' => $scoreB]),
+        Log::info("ProposalScoringService: Autonomous Gemma 4 comparison finalized", [
+            'request_id_a'       => $requestIdA,
+            'request_id_b'       => $requestIdB,
             'recommended_winner' => $winner,
-            'score_difference' => abs(round($scoreA - $scoreB, 2)),
-            'ai_reasoning' => $aiEvaluation['ai_reasoning'] ?? 'Evaluated via objective scoring and Gemma 4 policy factors.',
+            'score_a'            => $scoreA,
+            'score_b'            => $scoreB,
+        ]);
+
+        return [
+            'proposal_a' => array_merge($proposalAData, [
+                'score'                 => $scoreA,
+                'estimated_budget_kes'  => $aiEvaluation['predicted_budget_a'] ?? 'Ksh 2,000,000',
+                'implementation_period' => $aiEvaluation['predicted_timeline_a'] ?? '2 Months',
+            ]),
+            'proposal_b' => array_merge($proposalBData, [
+                'score'                 => $scoreB,
+                'estimated_budget_kes'  => $aiEvaluation['predicted_budget_b'] ?? 'Ksh 1,500,000',
+                'implementation_period' => $aiEvaluation['predicted_timeline_b'] ?? '1 Month',
+            ]),
+            'recommended_winner' => $winner,
+            'score_difference'   => abs($scoreA - $scoreB),
+            'ai_reasoning'       => $aiEvaluation['ai_reasoning'] ?? 'Autonomous evaluation completed by Gemma 4.',
             'trade_off_analysis' => $aiEvaluation['trade_off_analysis'] ?? 'N/A',
-            'suggested_fix' => $aiEvaluation['suggested_fix'] ?? 'N/A',
-            'confidence_score' => $aiEvaluation['confidence_score'] ?? 85,
+            'suggested_fix'      => $aiEvaluation['suggested_fix'] ?? 'N/A',
+            'confidence_score'   => (int) ($aiEvaluation['confidence_score'] ?? 85),
         ];
     }
 }
