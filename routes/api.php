@@ -47,7 +47,7 @@ Route::prefix('mp')->group(function () {
 
     // JWT Protected MP Routes
     Route::middleware('auth:mp_api')->group(function () {
-        
+        Route::post('/compare-proposals', [MpController::class, 'compareProposals']);
         // Auth management
         Route::post('/auth/logout', [MpAuthController::class, 'logout']);
         Route::post('/auth/refresh', [MpAuthController::class, 'refresh']);

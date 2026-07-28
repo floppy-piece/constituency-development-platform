@@ -7,7 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use App\Services\ProposalScoringService;
+use App\Services\Gemma4Service;
 use App\Models\ConstituencyFacility;
 use App\Http\Controllers\Controller;
 
@@ -168,21 +168,58 @@ class MpController extends Controller
     /**
      * API: Compare two competing proposed projects against real metrics.
      */
-    public function compareProposals(Request $request, ProposalScoringService $scoringService): JsonResponse
+    public function compareProposals(Request $request, Gemma4Service $gemmaService)
     {
         $request->validate([
             'proposal_a_id' => 'required|integer|exists:requests,request_id',
             'proposal_b_id' => 'required|integer|exists:requests,request_id',
         ]);
 
-        $result = $scoringService->compareProposals(
-            $request->input('proposal_a_id'),
-            $request->input('proposal_b_id')
-        );
+        // Fetch the two raw constituent requests independently of any facility table
+        $reqA = ConstituentRequest::where('request_id', $request->input('proposal_a_id'))->firstOrFail();
+        $reqB = ConstituentRequest::where('request_id', $request->input('proposal_b_id'))->firstOrFail();
+
+        // Package raw request fields for Gemma 4 analysis
+        $proposalA = [
+            'request_id'       => $reqA->request_id,
+            'title'            => $reqA->content ?? $reqA->raw_message ?? 'N/A',
+            'category'         => $reqA->category ?? 'General',
+            'declared_urgency' => strtolower($reqA->urgency ?? 'low'),
+            'citizen_reports'  => (int) ($reqA->similarity_hash ?? 1),
+            'created_at'       => $reqA->created_at?->toIso8601String(),
+        ];
+
+        $proposalB = [
+            'request_id'       => $reqB->request_id,
+            'title'            => $reqB->content ?? $reqB->raw_message ?? 'N/A',
+            'category'         => $reqB->category ?? 'General',
+            'declared_urgency' => strtolower($reqB->urgency ?? 'low'),
+            'citizen_reports'  => (int) ($reqB->similarity_hash ?? 1),
+            'created_at'       => $reqB->created_at?->toIso8601String(),
+        ];
+
+        // Gemma 4 performs full multi-factor comparison and analysis independently
+        $comparisonResult = $gemmaService->evaluateAndCompareProposals($proposalA, $proposalB);
 
         return response()->json([
-            'status' => 'success',
-            'comparison' => $result,
+            'status'     => 'success',
+            'comparison' => [
+                'proposal_a'         => array_merge($proposalA, [
+                    'score'                 => $comparisonResult['score_proposal_a'],
+                    'estimated_budget_kes'  => $comparisonResult['predicted_budget_a'],
+                    'implementation_period' => $comparisonResult['predicted_timeline_a'],
+                ]),
+                'proposal_b'         => array_merge($proposalB, [
+                    'score'                 => $comparisonResult['score_proposal_b'],
+                    'estimated_budget_kes'  => $comparisonResult['predicted_budget_b'],
+                    'implementation_period' => $comparisonResult['predicted_timeline_b'],
+                ]),
+                'recommended_winner' => $comparisonResult['recommended_winner'],
+                'ai_reasoning'       => $comparisonResult['ai_reasoning'],
+                'trade_off_analysis' => $comparisonResult['trade_off_analysis'],
+                'suggested_fix'      => $comparisonResult['suggested_fix'],
+                'confidence_score'   => $comparisonResult['confidence_score'],
+            ]
         ]);
     }
 

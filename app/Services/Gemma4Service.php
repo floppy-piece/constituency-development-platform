@@ -234,16 +234,16 @@ class Gemma4Service
     public function evaluateAndCompareProposals(array $proposalA, array $proposalB): array
     {
         if (empty($this->apiKey)) {
-            return $this->fallbackEvaluation($proposalA, $proposalB, 'Missing API Key.');
+            return $this->fallbackEvaluation('Missing API Key configuration.');
         }
 
-        $systemPrompt = "You are an expert AI Public Sector Planning & Infrastructure Policy Advisor for Kenya.\n"
-            . "Your task is to independently analyze, evaluate, and compare two competing constituent proposals submitted to an MP.\n"
-            . "You must perform your own complete evaluation from scratch:\n"
-            . "1. Analyze the urgency, public safety risks, community impact, and severity of each proposal.\n"
-            . "2. Predict and estimate the expected financial implementation costs (in Kenyan Shillings - KES) and required implementation timelines for each proposal based on their infrastructure scope.\n"
-            . "3. Rigorously contrast them, decide which proposal is definitively more urgent/critical to prioritize, and select the winning proposal ('proposal_a' or 'proposal_b').\n"
-            . "4. Assign standalone priority scores from 0 to 100 for both proposals based purely on your qualitative and quantitative judgment.";
+        $systemPrompt = "You are an expert AI Public Sector Planning & Infrastructure Policy Advisor.\n"
+            . "An MP is comparing two constituent requests side-by-side to see which should be prioritized first.\n"
+            . "Analyze all dimensions (public safety risks, urgency, citizen impact, and scope) to:\n"
+            . "1. Determine which request is definitively more urgent and pick the winning proposal ('proposal_a' or 'proposal_b').\n"
+            . "2. Assign standalone priority scores from 0 to 100 for both.\n"
+            . "3. Predict realistic implementation budgets (in Kenyan Shillings - KES) and timelines.\n"
+            . "4. Provide a clear technical suggested fix / action plan for resolution.";
 
         $payload = [
             'proposal_a' => $proposalA,
@@ -253,10 +253,9 @@ class Gemma4Service
         $url = rtrim($this->endpoint, '/') . "/{$this->model}:generateContent?key={$this->apiKey}";
 
         try {
-            $response = Http::withHeaders(['Content-Type' => 'application/json'])
-                ->timeout(60)
-                ->connectTimeout(20)
-                ->post($url, [
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+            ])->timeout(2000)->post($url, [
                     'system_instruction' => [
                         'parts' => [['text' => $systemPrompt]],
                     ],
@@ -281,36 +280,21 @@ class Gemma4Service
                                 'confidence_score'         => ['type' => 'INTEGER'],
                             ],
                             'required' => [
-                                'recommended_winner', 
-                                'score_proposal_a', 
-                                'score_proposal_b', 
-                                'predicted_budget_a',
-                                'predicted_budget_b',
-                                'predicted_timeline_a',
-                                'predicted_timeline_b',
-                                'ai_reasoning', 
-                                'trade_off_analysis', 
-                                'suggested_fix', 
-                                'confidence_score'
+                                'recommended_winner', 'score_proposal_a', 'score_proposal_b', 
+                                'predicted_budget_a', 'predicted_budget_b', 'predicted_timeline_a', 
+                                'predicted_timeline_b', 'ai_reasoning', 'trade_off_analysis', 
+                                'suggested_fix', 'confidence_score'
                             ],
                         ],
-                        'temperature'        => 0.3,
-                        'max_output_tokens'  => 800,
+                        'temperature' => 0.2,
                     ],
                 ]);
 
             if ($response->successful()) {
-                implementation_json:
                 $rawText = $response->json('candidates.0.content.parts.0.text') ?? '{}';
-                $parsed = $this->extractJson($rawText);
+                $parsed = json_decode($rawText, true);
 
                 if (is_array($parsed)) {
-                    Log::info("Gemma 4 Autonomous Policy & Expense Evaluation Successful", [
-                        'winner' => $parsed['recommended_winner'] ?? 'unknown',
-                        'score_a' => $parsed['score_proposal_a'] ?? 'N/A',
-                        'score_b' => $parsed['score_proposal_b'] ?? 'N/A',
-                    ]);
-
                     return [
                         'recommended_winner'   => $parsed['recommended_winner'] ?? 'proposal_a',
                         'score_proposal_a'     => (int) ($parsed['score_proposal_a'] ?? 50),
@@ -319,23 +303,23 @@ class Gemma4Service
                         'predicted_budget_b'   => $parsed['predicted_budget_b'] ?? 'Ksh 1,500,000',
                         'predicted_timeline_a' => $parsed['predicted_timeline_a'] ?? '2 Months',
                         'predicted_timeline_b' => $parsed['predicted_timeline_b'] ?? '1 Month',
-                        'ai_reasoning'         => $parsed['ai_reasoning'] ?? 'Autonomous evaluation completed by Gemma 4.',
+                        'ai_reasoning'         => $parsed['ai_reasoning'] ?? 'Autonomous comparison completed.',
                         'trade_off_analysis'   => $parsed['trade_off_analysis'] ?? 'N/A',
-                        'suggested_fix'        => $parsed['suggested_fix'] ?? 'N/A',
+                        'suggested_fix'        => $parsed['suggested_fix'] ?? 'Inspect and patch infrastructure.',
                         'confidence_score'     => (int) ($parsed['confidence_score'] ?? 85),
                     ];
                 }
             } else {
-                Log::error("Gemma 4 Evaluation HTTP Error ({$response->status()}): " . $response->body());
+                Log::error("Gemma API Error Response: " . $response->body());
             }
         } catch (Throwable $e) {
-            Log::warning("Gemma 4 API Exception: " . $e->getMessage());
+            Log::error("Gemma API Connection Exception: " . $e->getMessage());
         }
 
-        return $this->fallbackEvaluation($proposalA, $proposalB, 'API Connection failure.');
+        return $this->fallbackEvaluation('API Connection failure.');
     }
 
-    private function fallbackEvaluation(array $proposalA, array $proposalB, string $reason): array
+    private function fallbackEvaluation(string $reason): array
     {
         return [
             'recommended_winner'   => 'proposal_a',
@@ -347,11 +331,10 @@ class Gemma4Service
             'predicted_timeline_b' => '1 Month',
             'ai_reasoning'         => "Fallback Mode: {$reason} Defaulting baseline comparison.",
             'trade_off_analysis'   => 'N/A',
-            'suggested_fix'        => 'Review details manually.',
+            'suggested_fix'        => 'Manual review recommended.',
             'confidence_score'     => 50,
         ];
     }
-
     /**
      * Translate view text/content to a specific Kenyan local language using Gemma 4.
      */
