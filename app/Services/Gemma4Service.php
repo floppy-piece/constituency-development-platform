@@ -163,7 +163,6 @@ class Gemma4Service
                     ],
                     'temperature'        => 0.2,
                     'max_output_tokens'  => 400,
-                    'frequency_penalty'  => 0.5,
                 ],
             ]);
 
@@ -296,7 +295,6 @@ class Gemma4Service
                         ],
                         'temperature'        => 0.2,
                         'max_output_tokens'  => 400,
-                        'frequency_penalty'  => 0.5,
                     ],
                 ]);
 
