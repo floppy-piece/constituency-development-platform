@@ -81,7 +81,7 @@ class Gemma4Service
                         . "  \"urgency_score\": integer (0-10),\n"
                         . "  \"urgency\": \"string (low, medium, high)\",\n"
                         . "  \"confidence\": number (0.0 to 1.0),\n"
-                        . "  \"evaluation_thoughts\": \"string (detailing cost, time, and inaction effects)\",\n"
+                        //. "  \"evaluation_thoughts\": \"string (detailing cost, time, and inaction effects)\",\n"
                         . "  \"suggested_fix\": \"string (actionable government fix)\",\n"
                         . "  \"matched_request_id\": integer or null\n"
                         . "}\n\n"
@@ -163,7 +163,7 @@ class Gemma4Service
                         ],
                     ],
                     'temperature'        => 0.0,
-                    'max_output_tokens'  => 800,
+                    'max_output_tokens'  => 400,
                 ],
             ]);
 
@@ -259,8 +259,8 @@ class Gemma4Service
 
         try {
             $response = Http::withHeaders(['Content-Type' => 'application/json'])
-                ->timeout(20)
-                ->connectTimeout(10)
+                ->timeout(45)
+                ->connectTimeout(15)
                 ->post($url, [
                     'system_instruction' => [
                         'parts' => [['text' => $systemPrompt]],
@@ -295,7 +295,7 @@ class Gemma4Service
                             ],
                         ],
                         'temperature'        => 0.0,
-                        'max_output_tokens'  => 800,
+                        'max_output_tokens'  => 400,
                     ],
                 ]);
 

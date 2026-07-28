@@ -128,6 +128,10 @@ class WhatsAppWebhookController extends Controller
                 $recentRequests
             );
 
+            if (empty($analysis['translated_summary'])) {
+                $analysis['translated_summary'] = $rawText ?: 'Media upload submission';
+            }
+
             $urgency = $analysis['urgency'] ?? 'low';
             $matchedRequestId = $analysis['matched_request_id'] ?? null;
             $confidence = (float) ($analysis['confidence'] ?? 0.4);
@@ -258,15 +262,24 @@ class WhatsAppWebhookController extends Controller
         $filePath = null;
         $fileType = 'text';
 
-        if (isset($messageData['image'])) {
+        if (isset($messageData['image']['id'])) {
             $fileType = 'image';
             $filePath = $this->downloadWhatsAppMedia($messageData['image']['id'], 'jpg');
-        } elseif (isset($messageData['audio'])) {
+        } elseif (isset($messageData['audio']['id'])) {
             $fileType = 'audio';
             $filePath = $this->downloadWhatsAppMedia($messageData['audio']['id'], 'ogg');
-        } elseif (isset($messageData['video'])) {
+        } elseif (isset($messageData['video']['id'])) {
             $fileType = 'video';
             $filePath = $this->downloadWhatsAppMedia($messageData['video']['id'], 'mp4');
+        } elseif (isset($messageData['document']['id'])) {
+            $fileType = 'document';
+            $filePath = $this->downloadWhatsAppMedia($messageData['document']['id'], 'pdf');
+        }
+
+        // Ensure we explicitly return null if no file was actually downloaded
+        if ($filePath && !file_exists($filePath)) {
+            $filePath = null;
+            $fileType = 'text';
         }
 
         return [$filePath, $fileType];
