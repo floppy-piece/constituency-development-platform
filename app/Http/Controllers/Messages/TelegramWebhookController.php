@@ -168,6 +168,11 @@ class TelegramWebhookController extends Controller
                 $recentRequests
             );
 
+            // Clean up temporary local media file
+            if ($filePath && file_exists($filePath)) {
+                @unlink($filePath);
+            }
+
             $urgency = $analysis['urgency'] ?? 'low';
             $matchedRequestId = $analysis['matched_request_id'] ?? null;
             $confidence = (float) ($analysis['confidence'] ?? 0.4);

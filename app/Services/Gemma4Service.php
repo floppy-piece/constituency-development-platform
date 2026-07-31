@@ -11,12 +11,18 @@ class Gemma4Service
 {
     protected string $apiKey;
     protected string $endpoint;
-    protected string $model;
+    protected string $primaryModel;
+    protected string $audioModel;
 
     public function __construct()
     {
         $this->apiKey = config('services.gemma.api_key', '');
-        $this->model = config('services.gemma.model', 'gemma-4-26b-a4b-it');
+        
+        // Primary flagship model for text, reasoning, and JSON generation
+        $this->primaryModel = config('services.gemma.model', 'gemma-4-31b-it');
+        
+        // Lightweight audio-capable model specifically for transcribing voice clips
+        $this->audioModel = config('services.gemma.audio_model', 'gemma-4-12b');
 
         $this->endpoint = config(
             'services.gemma.endpoint',
@@ -26,7 +32,8 @@ class Gemma4Service
 
     /**
      * Process constituent request data including text and optional media attachments
-     * (Images, Audio, Video, or PDFs).
+     * (Images, Audio, Video, or PDFs). Audio files are specifically transcribed via 
+     * the audio-capable model first before hitting the 31B core logic.
      */
     public function processRequestData(
         ?string $text,
@@ -38,6 +45,17 @@ class Gemma4Service
         if (empty($this->apiKey)) {
             Log::error('Gemma 4 API Key is missing from config.');
             return $this->fallbackResponse($text);
+        }
+
+        // If an audio file is passed, transcribe it first using the audio model
+        $audioTranscript = '';
+        if ($filePath && file_exists($filePath)) {
+            $mimeType = $fileType ?: mime_content_type($filePath) ?: 'application/octet-stream';
+
+            if (str_starts_with($mimeType, 'audio/')) {
+                Log::info("Gemma 4: Audio payload detected. Transcribing with audio model ({$this->audioModel})...");
+                $audioTranscript = $this->transcribeAudioWithAudioModel($filePath, $mimeType);
+            }
         }
 
         // Format recent requests safely
@@ -52,14 +70,14 @@ class Gemma4Service
             $existingRequestsText = 'None';
         }
 
-        // System Prompt instructing Gemma 4 on text, audio, video, image, and document analysis
+        // System Prompt instructing Gemma 4 on text, audio transcriptions, video, image, and document analysis
         $systemPrompt = "You are a JSON generator, policy analyst, and constituency advisor for Kenya.\n"
                         . "Task Instructions:\n"
-                        . "1. Translate Swahili/Sheng/informal text to clear, professional English.\n"
-                        . "2. IF A MEDIA ATTACHMENT IS PRESENT (Image, Audio, Video, or PDF Document):\n"
-                        . "   - Carefully inspect/analyze the visual or audio content.\n"
+                        . "1. Translate Swahili/Sheng/informal text or audio transcripts to clear, professional English.\n"
+                        . "2. IF A MEDIA ATTACHMENT IS PRESENT (Image, Audio Transcript, Video, or PDF Document):\n"
+                        . "   - Carefully inspect/analyze the visual content or provided audio transcript text.\n"
                         . "   - Determine what physical infrastructure issue or public problem is shown or described (e.g., road potholes, water bursts, broken school facilities, damaged bridges).\n"
-                        . "3. Include relevant findings directly in `translated_summary` (e.g. 'Citizen reports water pipe leak. Attached photo shows major burst flooding a road near a school.').\n"
+                        . "3. Include relevant findings directly in `translated_summary` (e.g. 'Citizen reports water pipe leak. Attached photo/audio details major burst flooding a road near a school.').\n"
                         . "4. Evaluate the request holistically based on all government governance dimensions:\n"
                         . "   - Estimated financial cost impact.\n"
                         . "   - Expected time/period of completion.\n"
@@ -87,34 +105,39 @@ class Gemma4Service
                         . "EXISTING REQUESTS:\n"
                         . "{$existingRequestsText}";
 
-        $userContent = "User Submission: " . ($text ?: "No text provided (Attachment provided).");
+        // Combine base text input and any transcribed audio context
+        $combinedText = trim(($text ? "User Submission: {$text}" : "") . ($audioTranscript ? "\nAudio Message Transcript: {$audioTranscript}" : ""));
+        $userContent = $combinedText !== "" ? $combinedText : "No text provided (Attachment provided).";
 
         // 1. Build initial text part
         $parts = [
             ['text' => $userContent],
         ];
 
-        // 2. Attach Multimodal File (Image, Video, Audio, or PDF) if valid path exists
+        // 2. Attach non-audio Multimodal File (Image, Video, or PDF) if valid path exists
         if ($filePath && file_exists($filePath)) {
-            $mimeType = mime_content_type($filePath) ?: 'application/octet-stream';
+            $mimeType = $fileType ?: mime_content_type($filePath) ?: 'application/octet-stream';
 
-            if ($this->isSupportedMimeType($mimeType)) {
-                $base64Data = base64_encode(file_get_contents($filePath));
+            // If it's not audio (since audio was already transcribed above), pass it as inline binary data
+            if (!str_starts_with($mimeType, 'audio/')) {
+                if ($this->isSupportedMimeType($mimeType)) {
+                    $base64Data = base64_encode(file_get_contents($filePath));
 
-                $parts[] = [
-                    'inline_data' => [
-                        'mime_type' => $mimeType,
-                        'data'      => $base64Data,
-                    ],
-                ];
+                    $parts[] = [
+                        'inline_data' => [
+                            'mime_type' => $mimeType,
+                            'data'      => $base64Data,
+                        ],
+                    ];
 
-                Log::info("Gemma 4: Attached image payload ({$mimeType}) for analysis.");
-            } else {
-                Log::warning("Gemma 4: Unsupported attachment MIME type '{$mimeType}'. Proceeding with text only.");
+                    Log::info("Gemma 4: Attached media payload ({$mimeType}) for analysis.");
+                } else {
+                    Log::warning("Gemma 4: Unsupported attachment MIME type '{$mimeType}'. Proceeding with text only.");
+                }
             }
         }
 
-        $url = rtrim($this->endpoint, '/') . "/{$this->model}:generateContent?key={$this->apiKey}";
+        $url = rtrim($this->endpoint, '/') . "/{$this->primaryModel}:generateContent?key={$this->apiKey}";
 
         try {
             $response = Http::withHeaders([
@@ -174,7 +197,7 @@ class Gemma4Service
             $responseData = $response->json();
             $rawContent = $responseData['candidates'][0]['content']['parts'][0]['text'] ?? null;
 
-            Log::info('Gemma 4 Vision API Success - AI Response Generated', [
+            Log::info('Gemma 4 Vision/Core API Success - AI Response Generated', [
                 'raw_content'           => $rawContent,
                 'full_response_payload' => $responseData,
             ]);
@@ -209,6 +232,46 @@ class Gemma4Service
             Log::error('Gemma 4 Exception: ' . $e->getMessage());
             return $this->fallbackResponse($text);
         }
+    }
+
+    /**
+     * Transcribe audio file using the audio-capable model variant.
+     */
+    protected function transcribeAudioWithAudioModel(string $filePath, string $mimeType): string
+    {
+        $fileData = base64_encode(file_get_contents($filePath));
+        $url = rtrim($this->endpoint, '/') . "/{$this->audioModel}:generateContent?key={$this->apiKey}";
+
+        $response = Http::withHeaders([
+            'Content-Type' => 'application/json',
+        ])->post($url, [
+            'contents' => [
+                [
+                    'role' => 'user',
+                    'parts' => [
+                        ['text' => 'Accurately transcribe this audio file into text verbatim:'],
+                        [
+                            'inline_data' => [
+                                'mime_type' => $mimeType,
+                                'data'      => $fileData,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            'generationConfig' => [
+                'temperature' => 0.1,
+            ],
+        ]);
+
+        if ($response->successful()) {
+            $transcript = $response->json('candidates.0.content.parts.0.text') ?? '';
+            Log::info("Gemma 4 Audio Transcription Success", ['transcript' => $transcript]);
+            return trim($transcript);
+        }
+
+        Log::error("Audio Gemma Model API Error: " . $response->body());
+        return '';
     }
 
     /**
@@ -250,7 +313,7 @@ class Gemma4Service
             'proposal_b' => $proposalB,
         ];
 
-        $url = rtrim($this->endpoint, '/') . "/{$this->model}:generateContent?key={$this->apiKey}";
+        $url = rtrim($this->endpoint, '/') . "/{$this->primaryModel}:generateContent?key={$this->apiKey}";
 
         try {
             $response = Http::withHeaders([
@@ -335,6 +398,7 @@ class Gemma4Service
             'confidence_score'     => 50,
         ];
     }
+
     /**
      * Translate view text/content to a specific Kenyan local language using Gemma 4.
      */
@@ -359,7 +423,7 @@ class Gemma4Service
                 . "Output a JSON object with a single key: \"translated\".\n"
                 . "Do not include explanations or markdown fences.";
     
-            $url = rtrim($this->endpoint, '/') . "/{$this->model}:generateContent?key={$this->apiKey}";
+            $url = rtrim($this->endpoint, '/') . "/{$this->primaryModel}:generateContent?key={$this->apiKey}";
     
             try {
                 $response = Http::withHeaders(['Content-Type' => 'application/json'])
@@ -382,24 +446,18 @@ class Gemma4Service
     
                     $cleanText = $textToTranslate;
     
-                    // 1. Extract the JSON object substring { ... } ignoring chain-of-thought prefix
                     if (preg_match('/\{[\s\S]*\}/', $rawResponse, $matches)) {
                         $json = json_decode($matches[0], true);
                         if (isset($json['translated'])) {
                             $cleanText = $json['translated'];
                         }
                     } else {
-                        // Fallback: If no JSON structure is found, strip backticks/bullets and grab the last line
                         $lines = array_values(array_filter(array_map('trim', explode("\n", $rawResponse))));
                         if (!empty($lines)) {
                             $lastLine = end($lines);
                             $cleanText = preg_replace('/^[\*\-\s"`\']+|[\*\-\s"`\']+$/', '', $lastLine);
                         }
                     }
-    
-                    Log::info("Gemma 4 Translation Success [{$targetLanguage}]", [
-                        'translated' => $cleanText
-                    ]);
     
                     return $isInputArray ? (json_decode($cleanText, true) ?? $content) : trim($cleanText);
                 }
@@ -423,30 +481,22 @@ class Gemma4Service
             || $mimeType === 'text/plain';
     }
 
-    /**
-     * Robust extraction method handling valid JSON, markdown codeblocks,
-     * slash repetition loops, and fallback regex parsing for pseudo-JSON outputs.
-     */
     private function extractJson(string $text): ?array
     {
-        // Clean out infinite slash/dash repetition loops safely
         $text = preg_replace('/(-is)+/i', '', $text);
         $text = preg_replace('/(\b[A-Za-z0-9\-_]+[\/\-]){3,}[A-Za-z0-9\-_]+/i', '', $text);
 
-        // 1. Direct JSON parse
         $direct = json_decode($text, true);
         if (is_array($direct)) {
             return $direct;
         }
 
-        // 2. Clean out code fences
         $cleaned = preg_replace('/```(?:json)?\s*([\s\S]*?)\s*```/', '$1', $text);
         $cleanedResult = json_decode(trim($cleaned), true);
         if (is_array($cleanedResult)) {
             return $cleanedResult;
         }
 
-        // 3. Locate valid JSON braces {...} inside raw text (handles cut-off JSON)
         if (preg_match('/\{[\s\S]*\}/', $text, $matches)) {
             $jsonCandidate = $matches[0];
             $decoded = json_decode($jsonCandidate, true);
@@ -454,7 +504,6 @@ class Gemma4Service
                 return $decoded;
             }
             
-            // Attempt recovery if JSON was cut off at the end due to token limits
             $fixedJson = rtrim(trim($jsonCandidate), ',') . '}';
             $fixedDecoded = json_decode($fixedJson, true);
             if (is_array($fixedDecoded) && (isset($fixedDecoded['translated_summary']) || isset($fixedDecoded['recommended_winner']))) {
@@ -462,7 +511,6 @@ class Gemma4Service
             }
         }
 
-        // 4. Fallback parser: Extract key-value pairs formatted as key-value pairs or raw matches
         $extracted = [];
 
         if (preg_match('/(?:["`])?translated_summary(?:["`])?[\s]*:[\s]*"([^"]+)"/i', $text, $matchSummary)) {
