@@ -15,7 +15,7 @@
         </div>
 
         <!-- Metrics Overview Cards -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-5">
             <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-lg flex items-center justify-between">
                 <div>
                     <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Open Requests</span>
@@ -33,6 +33,26 @@
                 </div>
                 <div class="p-3 bg-amber-500/10 text-amber-400 rounded-xl">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-lg flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Awaiting Citizen Confirm</span>
+                    <p class="text-3xl font-black text-sky-400 mt-1" x-text="metrics.awaiting_verification_count || 0"></p>
+                </div>
+                <div class="p-3 bg-sky-500/10 text-sky-400 rounded-xl">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-lg flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Equity Flagged</span>
+                    <p class="text-3xl font-black text-rose-300 mt-1" x-text="metrics.equity_flagged_count || 0"></p>
+                </div>
+                <div class="p-3 bg-rose-500/10 text-rose-300 rounded-xl">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"></path></svg>
                 </div>
             </div>
 
@@ -57,113 +77,70 @@
             </div>
         </div>
 
-        <!-- Requests Feed Table / Cards -->
+        <!-- Sector overview -->
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-            <h2 class="text-lg font-bold text-slate-100">Recent Constituent Issues</h2>
-
-            <!-- Loading Skeleton -->
-            <div x-show="loading" class="space-y-3 py-4">
-                <div class="h-24 bg-slate-800/50 animate-pulse rounded-xl"></div>
-                <div class="h-24 bg-slate-800/50 animate-pulse rounded-xl"></div>
-                <div class="h-24 bg-slate-800/50 animate-pulse rounded-xl"></div>
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-100">Issues by sector</h2>
+                    <p class="text-xs text-slate-500 mt-0.5">Grouped citizen complaints (roads, water, drainage, fire, etc.). Open a sector to browse every request.</p>
+                </div>
+                <a href="/mp/requests" class="inline-flex items-center justify-center px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition">
+                    Browse all requests
+                </a>
             </div>
 
-            <!-- Empty State -->
-            <div x-show="!loading && requests.length === 0" class="text-center py-12 border border-dashed border-slate-800 rounded-xl">
+            <div x-show="loading" class="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
+                <div class="h-36 bg-slate-800/50 animate-pulse rounded-xl"></div>
+                <div class="h-36 bg-slate-800/50 animate-pulse rounded-xl"></div>
+            </div>
+
+            <div x-show="!loading && sectors.length === 0" class="text-center py-12 border border-dashed border-slate-800 rounded-xl">
                 <p class="text-slate-400">No active issues submitted for your constituency yet.</p>
+                <a href="/mp/requests" class="inline-block mt-3 text-sm text-emerald-400 hover:text-emerald-300">Search historical requests →</a>
             </div>
 
-            <!-- Detailed Requests Feed -->
-            <div x-show="!loading && requests.length > 0" class="space-y-4">
-                <template x-for="(req, index) in requests" :key="req.request_id || req.id || index">
-                    <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-5 space-y-4 hover:border-slate-700 transition"
-                         :class="{ 'border-amber-500/40': req.status === 'pending_review' }">
-                        
-                        <!-- Top Metadata Row -->
-                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <template x-if="req.status === 'pending_review'">
-                                    <span class="px-2.5 py-0.5 text-xs rounded-full font-bold uppercase tracking-wide bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                                        Needs review
-                                    </span>
-                                </template>
-
-                                <span class="px-2.5 py-0.5 text-xs rounded-full font-bold uppercase tracking-wide"
-                                    :class="{
-                                        'bg-red-500/10 text-red-400 border border-red-500/20': req.urgency === 'high',
-                                        'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20': req.urgency === 'medium',
-                                        'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20': req.urgency === 'low'
-                                    }"
-                                    x-text="(req.urgency || 'low') + ' urgency'">
-                                </span>
-                                
-                                <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full font-medium" 
-                                      x-text="req.category || 'General'">
-                                </span>
-
-                                <span class="text-xs bg-slate-800/80 text-slate-400 px-2.5 py-0.5 rounded-full font-medium capitalize"
-                                      x-text="(req.status || 'pending').replace('_', ' ')">
-                                </span>
-
-                                <template x-if="req.confidence !== null && req.confidence !== undefined">
-                                    <span class="text-xs text-slate-500"
-                                          x-text="'AI ' + Math.round((req.confidence || 0) * 100) + '%'">
-                                    </span>
-                                </template>
-
-                                <template x-if="req.upload_file_path">
-                                    <span class="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2.5 py-0.5 rounded-full font-medium"
-                                          x-text="'📎 ' + (req.file_type || 'Attachment')">
-                                    </span>
-                                </template>
+            <div x-show="!loading && sectors.length > 0" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <template x-for="sector in sectors" :key="sector.sector">
+                    <div class="bg-slate-950/70 border border-slate-800 rounded-2xl p-5 space-y-4 hover:border-slate-700 transition">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 class="text-lg font-semibold text-slate-100" x-text="sector.sector"></h3>
+                                <p class="text-xs text-slate-500 mt-1">
+                                    <span x-text="sector.count"></span> open request<span x-text="sector.count === 1 ? '' : 's'"></span>
+                                    · avg score <span x-text="(sector.avg_priority ?? 0).toFixed(1)"></span>
+                                </p>
                             </div>
-
-                            <span class="text-xs text-slate-500" x-text="formatDate(req.created_at)"></span>
+                            <a :href="'/mp/requests?sector=' + encodeURIComponent(sector.sector)"
+                               class="shrink-0 px-3 py-1.5 text-xs rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/20">
+                                View all
+                            </a>
                         </div>
 
-                        <!-- Content Preview -->
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div class="space-y-1">
-                                <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">AI Summary / Content</span>
-                                <p class="text-slate-200 text-sm font-medium leading-relaxed" x-text="req.content || 'No translated content.'"></p>
-                            </div>
-
-                            <div class="space-y-1 bg-slate-900/50 p-3 rounded-lg border border-slate-800/50">
-                                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Raw Message</span>
-                                <p class="text-slate-400 text-xs italic leading-relaxed" x-text="req.raw_message || 'N/A'"></p>
-                            </div>
+                        <div class="flex flex-wrap gap-2 text-[11px]">
+                            <span class="px-2 py-0.5 rounded-full bg-red-500/10 text-red-300 border border-red-500/20"
+                                  x-show="sector.high_urgency > 0"
+                                  x-text="sector.high_urgency + ' high urgency'"></span>
+                            <span class="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20"
+                                  x-show="sector.needs_review > 0"
+                                  x-text="sector.needs_review + ' need review'"></span>
+                            <span class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400"
+                                  x-show="sector.latest_at"
+                                  x-text="'Latest ' + formatDate(sector.latest_at)"></span>
                         </div>
 
-                        <!-- Details & Action Bar -->
-                        <div class="flex flex-wrap items-center justify-between pt-2 text-xs text-slate-400 gap-2 border-t border-slate-800/50">
-                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
-                                <span x-text="'📱 Phone: ' + (req.user?.phone_number || 'N/A')"></span>
-                                <template x-if="req.cluster_summary">
-                                    <span class="text-sky-400" x-text="'🔁 ' + req.cluster_summary"></span>
-                                </template>
-                                <template x-if="!req.cluster_summary">
-                                    <span x-text="'🔁 ' + (req.similar_count || 1) + ' report' + ((req.similar_count || 1) === 1 ? '' : 's')"></span>
-                                </template>
-                            </div>
-
-                            <div class="flex flex-wrap items-center gap-2">
-                                <button @click="openModal(req)" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg transition">
-                                    View Details
+                        <div class="space-y-2 border-t border-slate-800 pt-3">
+                            <p class="text-[10px] uppercase tracking-wider text-slate-500">Top in this sector</p>
+                            <template x-for="sample in (sector.samples || [])" :key="sample.request_id">
+                                <button type="button" @click="openModal(sample)"
+                                        class="w-full text-left p-3 rounded-xl bg-slate-900/80 border border-slate-800/80 hover:border-slate-700 transition">
+                                    <p class="text-sm text-slate-200 line-clamp-2" x-text="sample.content"></p>
+                                    <div class="flex flex-wrap gap-2 mt-2 text-[10px] text-slate-500">
+                                        <span class="capitalize" x-text="sample.urgency + ' urgency'"></span>
+                                        <span x-text="'Score ' + (sample.priority_score ?? 0).toFixed(1)"></span>
+                                        <span class="capitalize" x-text="(sample.status || '').replace('_', ' ')"></span>
+                                    </div>
                                 </button>
-                                <template x-if="req.status === 'pending_review'">
-                                    <button @click="updateStatus(req.request_id || req.id, 'pending')" class="px-3 py-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 font-semibold rounded-lg transition">
-                                        Confirm
-                                    </button>
-                                </template>
-                                <template x-if="req.status === 'pending' || req.status === 'pending_review'">
-                                    <button @click="updateStatus(req.request_id || req.id, 'in_progress')" class="px-3 py-1.5 text-xs bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 font-semibold rounded-lg transition">
-                                        Start work
-                                    </button>
-                                </template>
-                                <button @click="updateStatus(req.request_id || req.id, 'resolved')" class="px-3 py-1.5 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 font-semibold rounded-lg transition">
-                                    Mark Resolved
-                                </button>
-                            </div>
+                            </template>
                         </div>
                     </div>
                 </template>
@@ -190,6 +167,32 @@
                         <p class="text-slate-400 italic mt-1 bg-slate-950 p-3 rounded-xl border border-slate-800" x-text="selectedReq?.raw_message"></p>
                     </div>
 
+                    <template x-if="selectedReq?.evaluation_thoughts">
+                        <div>
+                            <span class="text-xs uppercase text-slate-500 font-bold">Why this ranking (AI)</span>
+                            <p class="text-amber-100/90 mt-1 bg-amber-500/5 p-3 rounded-xl border border-amber-500/20" x-text="selectedReq.evaluation_thoughts"></p>
+                            <p class="text-[11px] text-slate-500 mt-1">AI recommendation — not an allocation decision until you confirm or change status.</p>
+                        </div>
+                    </template>
+
+                    <template x-if="selectedReq?.priority_factors">
+                        <div>
+                            <span class="text-xs uppercase text-slate-500 font-bold">Priority score breakdown</span>
+                            <p class="text-slate-300 mt-1 text-sm" x-text="selectedReq.priority_factors?.reason"></p>
+                            <p class="text-[11px] text-slate-500 mt-1">
+                                Score: <span x-text="(selectedReq.priority_score ?? 0).toFixed(1)"></span>
+                                · Confidence excluded from ranking
+                            </p>
+                        </div>
+                    </template>
+
+                    <template x-if="selectedReq?.suggested_fix">
+                        <div>
+                            <span class="text-xs uppercase text-slate-500 font-bold">Suggested Fix</span>
+                            <p class="text-emerald-100/90 mt-1 bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/20" x-text="selectedReq.suggested_fix"></p>
+                        </div>
+                    </template>
+
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <span class="text-xs uppercase text-slate-500 font-bold">Category</span>
@@ -197,15 +200,39 @@
                         </div>
                         <div>
                             <span class="text-xs uppercase text-slate-500 font-bold">Urgency</span>
-                            <p class="text-slate-200 mt-0.5 capitalize" x-text="selectedReq?.urgency"></p>
+                            <p class="text-slate-200 mt-0.5 capitalize">
+                                <span x-text="selectedReq?.urgency"></span>
+                                <template x-if="selectedReq?.urgency_score != null">
+                                    <span class="text-slate-500" x-text="' (' + selectedReq.urgency_score + '/10)'"></span>
+                                </template>
+                            </p>
                         </div>
                         <div>
                             <span class="text-xs uppercase text-slate-500 font-bold">Status</span>
                             <p class="text-slate-200 mt-0.5 capitalize" x-text="(selectedReq?.status || 'pending').replace('_', ' ')"></p>
                         </div>
                         <div>
+                            <span class="text-xs uppercase text-slate-500 font-bold">Citizen Verification</span>
+                            <p class="text-slate-200 mt-0.5 capitalize" x-text="selectedReq?.verification_status || 'not requested'"></p>
+                        </div>
+                        <div>
                             <span class="text-xs uppercase text-slate-500 font-bold">AI Confidence</span>
                             <p class="text-slate-200 mt-0.5" x-text="selectedReq?.confidence != null ? Math.round(selectedReq.confidence * 100) + '%' : 'N/A'"></p>
+                        </div>
+                        <div>
+                            <span class="text-xs uppercase text-slate-500 font-bold">Channel</span>
+                            <p class="text-slate-200 mt-0.5 capitalize" x-text="selectedReq?.source_channel || 'N/A'"></p>
+                        </div>
+                        <div>
+                            <span class="text-xs uppercase text-slate-500 font-bold">Detected Language</span>
+                            <p class="text-slate-200 mt-0.5" x-text="selectedReq?.detected_language || 'N/A'"></p>
+                        </div>
+                        <div class="col-span-2" x-show="selectedReq?.equity_flag">
+                            <span class="text-xs uppercase text-slate-500 font-bold">Equity / Bias Check</span>
+                            <p class="text-rose-200 mt-0.5 text-xs" x-text="(selectedReq?.equity_reasons || []).join(' ')"></p>
+                            <p class="text-[11px] text-slate-500 mt-1" x-show="selectedReq?.equity_boost">
+                                Fairness boost: +<span x-text="selectedReq.equity_boost"></span> (confidence not used in priority score)
+                            </p>
                         </div>
                         <div>
                             <span class="text-xs uppercase text-slate-500 font-bold">Phone Number</span>
@@ -224,6 +251,24 @@
                         </div>
                     </template>
 
+                    <template x-if="selectedReq?.verification_note">
+                        <div>
+                            <span class="text-xs uppercase text-slate-500 font-bold">Citizen Verification Reply</span>
+                            <p class="text-sky-200 mt-0.5" x-text="selectedReq.verification_note"></p>
+                        </div>
+                    </template>
+
+                    <template x-if="selectedReq?.verification_file_path">
+                        <div>
+                            <span class="text-xs uppercase text-slate-500 font-bold">Verification Photo</span>
+                            <div class="mt-2">
+                                <a :href="'/' + selectedReq.verification_file_path" target="_blank" class="inline-flex items-center space-x-2 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/20 px-4 py-2 rounded-xl text-xs transition">
+                                    <span>View confirmation media</span>
+                                </a>
+                            </div>
+                        </div>
+                    </template>
+
                     <template x-if="selectedReq?.upload_file_path">
                         <div>
                             <span class="text-xs uppercase text-slate-500 font-bold">Attachment</span>
@@ -236,7 +281,16 @@
                     </template>
                 </div>
 
-                <div class="flex justify-end pt-3 border-t border-slate-800">
+                <div class="flex flex-wrap justify-end gap-2 pt-3 border-t border-slate-800">
+                    <template x-if="selectedReq?.status === 'pending_review'">
+                        <button @click="updateStatus(selectedReq.request_id || selectedReq.id, 'pending')" class="px-3 py-2 text-xs bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded-xl font-semibold">Confirm</button>
+                    </template>
+                    <template x-if="selectedReq && selectedReq.status !== 'resolved' && selectedReq.status !== 'in_progress'">
+                        <button @click="updateStatus(selectedReq.request_id || selectedReq.id, 'in_progress')" class="px-3 py-2 text-xs bg-sky-500/10 text-sky-300 border border-sky-500/20 rounded-xl font-semibold">Start work</button>
+                    </template>
+                    <template x-if="selectedReq && selectedReq.status !== 'resolved'">
+                        <button @click="updateStatus(selectedReq.request_id || selectedReq.id, 'resolved')" class="px-3 py-2 text-xs bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 rounded-xl font-semibold">Mark resolved</button>
+                    </template>
                     <button @click="selectedReq = null" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-700">Close</button>
                 </div>
             </div>
@@ -251,6 +305,7 @@
                 mpInfo: {},
                 metrics: {},
                 requests: [],
+                sectors: [],
                 selectedReq: null,
 
                 async initDashboard() {
@@ -267,6 +322,7 @@
                             this.mpInfo = data.mp_info || {};
                             this.metrics = data.metrics || {};
                             this.requests = data.recent_requests || [];
+                            this.sectors = data.sectors || [];
                         }
                     } catch (err) {
                         console.error('Failed to load dashboard:', err);
@@ -296,24 +352,8 @@
                         });
                         const data = await response.json();
                         if (data.status === 'success') {
-                            const req = this.requests.find(r => (r.request_id || r.id) === id);
-                            const wasReview = req && req.status === 'pending_review';
-
-                            if (status === 'resolved') {
-                                this.requests = this.requests.filter(r => (r.request_id || r.id) !== id);
-                                if (this.metrics.total_requests > 0) {
-                                    this.metrics.total_requests--;
-                                }
-                            } else if (req) {
-                                req.status = status;
-                                if (this.selectedReq && (this.selectedReq.request_id || this.selectedReq.id) === id) {
-                                    this.selectedReq.status = status;
-                                }
-                            }
-
-                            if (wasReview && this.metrics.needs_review_count > 0) {
-                                this.metrics.needs_review_count--;
-                            }
+                            this.selectedReq = null;
+                            await this.fetchDashboard();
                         }
                     } catch (err) {
                         console.error('Failed to update request status:', err);

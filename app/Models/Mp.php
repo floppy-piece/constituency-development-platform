@@ -23,6 +23,8 @@ class Mp extends Authenticatable implements JWTSubject
         'term_start',
         'term_end',
         'avatar_path',
+        'priorities_locked_at',
+        'available_budget_kes',
     ];
 
     protected $hidden = [
@@ -34,6 +36,8 @@ class Mp extends Authenticatable implements JWTSubject
         'email_verified_at' => 'datetime',
         'term_start' => 'datetime',
         'term_end' => 'datetime',
+        'priorities_locked_at' => 'datetime',
+        'available_budget_kes' => 'integer',
     ];
 
     public function getJWTIdentifier()
