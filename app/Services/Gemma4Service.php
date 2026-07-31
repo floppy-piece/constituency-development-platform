@@ -50,9 +50,20 @@ class Gemma4Service
         // If an audio file is passed, transcribe it first using the audio model
         $audioTranscript = '';
         if ($filePath && file_exists($filePath)) {
-            $mimeType = $fileType ?: mime_content_type($filePath) ?: 'application/octet-stream';
+            $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+            $mimeType = $fileType;
+            
+            if (empty($mimeType) || $mimeType === 'audio' || !str_contains($mimeType, '/')) {
+                $mimeType = match($extension) {
+                    'ogg', 'oga', 'opus' => 'audio/ogg',
+                    'mp3' => 'audio/mp3',
+                    'wav' => 'audio/wav',
+                    'm4a', 'mp4' => 'audio/mp4',
+                    default => mime_content_type($filePath) ?: 'audio/ogg',
+                };
+            }
 
-            if (str_starts_with($mimeType, 'audio/')) {
+            if (str_starts_with($mimeType, 'audio/') || in_array($extension, ['ogg', 'oga', 'opus', 'mp3', 'wav', 'm4a'])) {
                 Log::info("Gemma 4: Audio payload detected. Transcribing with audio model ({$this->audioModel})...");
                 $audioTranscript = $this->transcribeAudioWithAudioModel($filePath, $mimeType);
             }
@@ -116,10 +127,14 @@ class Gemma4Service
 
         // 2. Attach non-audio Multimodal File (Image, Video, or PDF) if valid path exists
         if ($filePath && file_exists($filePath)) {
-            $mimeType = $fileType ?: mime_content_type($filePath) ?: 'application/octet-stream';
+            $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+            $mimeType = $fileType;
+            if (empty($mimeType) || $mimeType === 'audio' || !str_contains($mimeType, '/')) {
+                $mimeType = mime_content_type($filePath) ?: 'application/octet-stream';
+            }
 
-            // If it's not audio (since audio was already transcribed above), pass it as inline binary data
-            if (!str_starts_with($mimeType, 'audio/')) {
+            // Skip audio here since it was already transcribed above
+            if (!str_starts_with($mimeType, 'audio/') && !in_array($extension, ['ogg', 'oga', 'opus', 'mp3', 'wav', 'm4a'])) {
                 if ($this->isSupportedMimeType($mimeType)) {
                     $base64Data = base64_encode(file_get_contents($filePath));
 
@@ -475,7 +490,7 @@ class Gemma4Service
     private function isSupportedMimeType(string $mimeType): bool
     {
         return str_starts_with($mimeType, 'image/')
-            || str_starts_with($mimeType, 'audio/')
+            || str_starts_with($mimeType, 'audio')
             || str_starts_with($mimeType, 'video/')
             || $mimeType === 'application/pdf'
             || $mimeType === 'text/plain';
