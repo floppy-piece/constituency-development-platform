@@ -6,6 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\ConstituencyRequest;
 use App\Models\User;
 use App\Services\Gemma4Service;
+<<<<<<< HEAD
+=======
+use App\Services\IssueClusterService;
+use App\Services\PriorityScoringService;
+use App\Services\BudgetOptimizerService;
+use App\Services\ResolutionVerificationService;
+>>>>>>> origin/feature/communities-clustering
 use App\Services\WhatsApp\WhatsAppLocationService;
 use App\Services\WhatsApp\WhatsAppFileService;
 use App\Services\WhatsApp\WhatsAppMessagingService;
@@ -16,17 +23,38 @@ use Throwable;
 class WhatsAppWebhookController extends Controller
 {
     protected Gemma4Service $gemmaService;
+<<<<<<< HEAD
+=======
+    protected IssueClusterService $clusterService;
+    protected PriorityScoringService $priorityService;
+    protected BudgetOptimizerService $budgetService;
+    protected ResolutionVerificationService $verificationService;
+>>>>>>> origin/feature/communities-clustering
     protected WhatsAppLocationService $locationService;
     protected WhatsAppFileService $fileService;
     protected WhatsAppMessagingService $messagingService;
 
     public function __construct(
         Gemma4Service $gemmaService,
+<<<<<<< HEAD
+=======
+        IssueClusterService $clusterService,
+        PriorityScoringService $priorityService,
+        BudgetOptimizerService $budgetService,
+        ResolutionVerificationService $verificationService,
+>>>>>>> origin/feature/communities-clustering
         WhatsAppLocationService $locationService,
         WhatsAppFileService $fileService,
         WhatsAppMessagingService $messagingService
     ) {
         $this->gemmaService = $gemmaService;
+<<<<<<< HEAD
+=======
+        $this->clusterService = $clusterService;
+        $this->priorityService = $priorityService;
+        $this->budgetService = $budgetService;
+        $this->verificationService = $verificationService;
+>>>>>>> origin/feature/communities-clustering
         $this->locationService = $locationService;
         $this->fileService = $fileService;
         $this->messagingService = $messagingService;
@@ -71,6 +99,28 @@ class WhatsAppWebhookController extends Controller
             $userId = $user->getKey();
             $rawText = $messageData['text']['body'] ?? ($messageData['caption'] ?? '');
 
+<<<<<<< HEAD
+=======
+            // Sprint E: citizen resolution verification replies (YES / NO / photo)
+            $pendingVerification = $this->verificationService->findPendingForUser((int) $userId);
+            if ($pendingVerification) {
+                [$filePath, $fileType] = $this->downloadWhatsAppMediaPayload($messageData);
+                $result = $this->verificationService->handleCitizenReply(
+                    $user,
+                    $rawText,
+                    $filePath,
+                    $fileType,
+                    ConstituencyRequest::CHANNEL_WHATSAPP
+                );
+
+                if ($result['handled']) {
+                    return response()->json([
+                        'status' => 'verification_'.$result['outcome'],
+                    ], 200);
+                }
+            }
+
+>>>>>>> origin/feature/communities-clustering
             // Location Coordinates from WhatsApp native location pin if sent directly
             $latitude = $messageData['location']['latitude'] ?? null;
             $longitude = $messageData['location']['longitude'] ?? null;
@@ -137,6 +187,7 @@ class WhatsAppWebhookController extends Controller
             $confidence = (float) ($analysis['confidence'] ?? 0.4);
             $status = ConstituencyRequest::statusFromConfidence($confidence);
             $category = $analysis['category'] ?? 'General';
+<<<<<<< HEAD
 
             if ($matchedRequestId) {
                 $similarRequest = ConstituencyRequest::where('request_id', $matchedRequestId)
@@ -194,6 +245,45 @@ class WhatsAppWebhookController extends Controller
                 ]);
             }
 
+=======
+            $explainability = [
+                'urgency_score'       => isset($analysis['urgency_score']) ? (int) $analysis['urgency_score'] : null,
+                'evaluation_thoughts' => $analysis['evaluation_thoughts'] ?? null,
+                'suggested_fix'       => $analysis['suggested_fix'] ?? null,
+                'detected_language'   => $analysis['detected_language'] ?? null,
+            ];
+
+            $matchedRequest = null;
+            if ($matchedRequestId) {
+                $matchedRequest = ConstituencyRequest::where('request_id', $matchedRequestId)
+                    ->where('mp_id', $mpId)
+                    ->first();
+            }
+
+            $createdRequest = ConstituencyRequest::create(array_merge([
+                'user_id'          => $userId,
+                'mp_id'            => $mpId,
+                'ward_id'          => $wardId,
+                'raw_message'      => $rawText ?: 'Media upload submission',
+                'content'          => $analysis['translated_summary'] ?? ($rawText ?: 'Media upload submission'),
+                'upload_file_path' => $filePath,
+                'file_type'        => $fileType,
+                'source_channel'   => ConstituencyRequest::CHANNEL_WHATSAPP,
+                'urgency'          => $urgency,
+                'category'         => $category,
+                'confidence'       => $confidence,
+                'status'           => $status,
+                'similar_count'    => 1,
+                'cluster_ward_ids' => $wardId ? [$wardId] : [],
+                'latitude'         => $latitude ?? 0.0000,
+                'longitude'        => $longitude ?? 0.0000,
+            ], $explainability));
+
+            $this->clusterService->attachRequest($createdRequest, $analysis, $matchedRequest);
+            $scored = $this->priorityService->score($createdRequest->fresh(['cluster', 'mp', 'ward.constituency']));
+            $this->budgetService->ensureCost($scored, false);
+
+>>>>>>> origin/feature/communities-clustering
             $mpName = $assignedMp->mp_name ?? 'your MP';
             $constituencyName = $assignedMp->constituency_name ?? $assignedMp->constituency ?? '';
             

@@ -101,7 +101,7 @@
                             <span>Dashboard</span>
                         </a>
 
-                        <!-- Hotspots (GIS Map) -->
+                        <!-- Demand Hotspots -->
                         <a href="/mp/hotspots" 
                            class="flex items-center space-x-3 px-3.5 py-3 rounded-xl transition text-sm font-medium {{ request()->is('mp/hotspots*') ? 'bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20' : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200' }}">
                             <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -109,6 +109,24 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
                             </svg>
                             <span>Demand Hotspots</span>
+                        </a>
+
+                        <!-- Priorities -->
+                        <a href="/mp/priorities"
+                           class="flex items-center space-x-3 px-3.5 py-3 rounded-xl transition text-sm font-medium {{ request()->is('mp/priorities*') ? 'bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20' : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200' }}">
+                            <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"></path>
+                            </svg>
+                            <span>Priorities</span>
+                        </a>
+
+                        <!-- All Requests -->
+                        <a href="/mp/requests"
+                           class="flex items-center space-x-3 px-3.5 py-3 rounded-xl transition text-sm font-medium {{ request()->is('mp/requests*') ? 'bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20' : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200' }}">
+                            <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                            <span>All Requests</span>
                         </a>
 
                         <!-- Feasibility Matrix -->

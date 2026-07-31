@@ -22,7 +22,7 @@ class Gemma4Service
         $this->primaryModel = config('services.gemma.model', 'gemma-4-31b-it');
         
         // Lightweight audio-capable model specifically for transcribing voice clips
-        $this->audioModel = "gemini-2.5-flash";
+        $this->audioModel = "gemini-3.5-flash";
 
         $this->endpoint = config(
             'services.gemma.endpoint',
@@ -101,7 +101,11 @@ class Gemma4Service
                         . "6. Provide a concise, brief step-by-step evaluation thought process in `evaluation_thoughts` (under 15 words, NO repetitive loops like 'way-of-life/impactful') and formulate a concrete technical remediation plan in `suggested_fix`.\n"
                         . "7. Compare the submission to existing requests. If it semantically matches an existing issue, return that integer ID in 'matched_request_id'. Otherwise return null.\n"
                         . "8. Assign a `category` such as Roads, Water, Education, Health, Security, Sanitation, Electricity, or General.\n"
-                        . "9. Provide a `confidence` score from 0.0 to 1.0 reflecting how sure you are about category, urgency, and any dedup match.\n\n"
+                        . "9. Provide a `confidence` score from 0.0 to 1.0 reflecting how sure you are about category, urgency, and any dedup match.\n"
+                        . "10. Provide a short `theme_label` (3-7 words) naming the recurring civic theme (e.g. 'No water in Kisauni').\n"
+                        . "11. Detect the primary language/dialect of the citizen submission as `detected_language` "
+                        . "(one of: en, sw, sheng, kikuyu, luo, luhya, kalenjin, kamba, mixed, other). "
+                        . "Do NOT lower urgency solely because the language is informal, Sheng, or vernacular.\n\n"
                         . "Your response MUST be a valid JSON object with the following keys:\n"
                         . "{\n"
                         . "  \"translated_summary\": \"string\",\n"
@@ -111,7 +115,9 @@ class Gemma4Service
                         . "  \"confidence\": number (0.0 to 1.0),\n"
                         . "  \"evaluation_thoughts\": \"string\",\n"
                         . "  \"suggested_fix\": \"string\",\n"
-                        . "  \"matched_request_id\": integer or null\n"
+                        . "  \"matched_request_id\": integer or null,\n"
+                        . "  \"theme_label\": \"string\",\n"
+                        . "  \"detected_language\": \"string\"\n"
                         . "}\n\n"
                         . "EXISTING REQUESTS:\n"
                         . "{$existingRequestsText}";
@@ -188,6 +194,8 @@ class Gemma4Service
                                 'type'     => 'INTEGER',
                                 'nullable' => true,
                             ],
+                            'theme_label'         => ['type' => 'STRING'],
+                            'detected_language'   => ['type' => 'STRING'],
                         ],
                         'required' => [
                             'translated_summary', 
@@ -196,7 +204,9 @@ class Gemma4Service
                             'urgency', 
                             'confidence', 
                             'evaluation_thoughts', 
-                            'suggested_fix'
+                            'suggested_fix',
+                            'theme_label',
+                            'detected_language',
                         ],
                     ],
                     'temperature'        => 0.2,
@@ -238,6 +248,8 @@ class Gemma4Service
                 'confidence'          => $confidence,
                 'evaluation_thoughts' => $parsed['evaluation_thoughts'] ?? 'Evaluated via Gemma 4 governance model.',
                 'suggested_fix'       => $parsed['suggested_fix'] ?? 'Inspect site and deploy resources accordingly.',
+                'theme_label'         => $parsed['theme_label'] ?? null,
+                'detected_language'   => $parsed['detected_language'] ?? 'unknown',
                 'matched_request_id'  => is_numeric($parsed['matched_request_id'] ?? null)
                     ? (int) $parsed['matched_request_id']
                     : null,
@@ -395,6 +407,126 @@ class Gemma4Service
         }
 
         return $this->fallbackEvaluation('API Connection failure.');
+    }
+
+    /**
+     * Estimate a single project's implementation cost in KES for budget-aware bundling.
+     *
+     * @param  array{content?:string,category?:string,urgency?:string,urgency_score?:int,reports?:int,suggested_fix?:string}  $context
+     * @return array{estimated_cost_kes:int,cost_rationale:string,confidence:float}
+     */
+    public function estimateProjectCost(array $context): array
+    {
+        $fallback = $this->fallbackCostEstimate($context);
+
+        if (empty($this->apiKey)) {
+            return $fallback;
+        }
+
+        $systemPrompt = "You are a Kenyan CDF / constituency infrastructure cost estimator.\n"
+            . "Estimate a realistic one-time intervention budget in Kenyan Shillings (KES) for the civic request.\n"
+            . "Use typical Kenya ward/CDF project ranges (not national mega-projects).\n"
+            . "Return ONLY JSON with estimated_cost_kes (integer, no commas), cost_rationale (one short sentence), and confidence (0.0-1.0).";
+
+        $url = rtrim($this->endpoint, '/') . "/{$this->model}:generateContent?key={$this->apiKey}";
+
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+            ])->timeout(45)->post($url, [
+                'system_instruction' => [
+                    'parts' => [['text' => $systemPrompt]],
+                ],
+                'contents' => [
+                    ['role' => 'user', 'parts' => [['text' => json_encode($context)]]],
+                ],
+                'generationConfig' => [
+                    'response_mime_type' => 'application/json',
+                    'response_schema' => [
+                        'type' => 'OBJECT',
+                        'properties' => [
+                            'estimated_cost_kes' => ['type' => 'INTEGER'],
+                            'cost_rationale' => ['type' => 'STRING'],
+                            'confidence' => ['type' => 'NUMBER'],
+                        ],
+                        'required' => ['estimated_cost_kes', 'cost_rationale', 'confidence'],
+                    ],
+                    'temperature' => 0.2,
+                    'max_output_tokens' => 200,
+                ],
+            ]);
+
+            if ($response->successful()) {
+                $rawText = $response->json('candidates.0.content.parts.0.text') ?? '{}';
+                $parsed = json_decode($rawText, true);
+
+                if (is_array($parsed) && isset($parsed['estimated_cost_kes'])) {
+                    $cost = (int) $parsed['estimated_cost_kes'];
+                    if ($cost <= 0) {
+                        $cost = self::parseKesAmount((string) ($parsed['estimated_cost_kes'] ?? '')) ?: $fallback['estimated_cost_kes'];
+                    }
+
+                    return [
+                        'estimated_cost_kes' => max(50_000, min(50_000_000, $cost)),
+                        'cost_rationale' => (string) ($parsed['cost_rationale'] ?? $fallback['cost_rationale']),
+                        'confidence' => (float) ($parsed['confidence'] ?? 0.7),
+                    ];
+                }
+            } else {
+                Log::warning('Gemma cost estimate HTTP error: '.$response->body());
+            }
+        } catch (Throwable $e) {
+            Log::warning('Gemma cost estimate failed: '.$e->getMessage());
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * Parse strings like "Ksh 2,000,000" into an integer KES amount.
+     */
+    public static function parseKesAmount(string $value): ?int
+    {
+        if (preg_match('/([\d,]+(?:\.\d+)?)/', $value, $m)) {
+            $num = (float) str_replace(',', '', $m[1]);
+
+            return $num > 0 ? (int) round($num) : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array{content?:string,category?:string,urgency?:string,urgency_score?:int,reports?:int}  $context
+     * @return array{estimated_cost_kes:int,cost_rationale:string,confidence:float}
+     */
+    private function fallbackCostEstimate(array $context): array
+    {
+        $category = strtolower((string) ($context['category'] ?? 'general'));
+        $base = match (true) {
+            str_contains($category, 'road') => 2_500_000,
+            str_contains($category, 'water') => 800_000,
+            str_contains($category, 'educ') || str_contains($category, 'school') => 1_500_000,
+            str_contains($category, 'health') || str_contains($category, 'hosp') => 2_000_000,
+            str_contains($category, 'secur') => 500_000,
+            str_contains($category, 'sanit') || str_contains($category, 'drain') => 1_200_000,
+            str_contains($category, 'electr') || str_contains($category, 'power') => 1_800_000,
+            default => 1_000_000,
+        };
+
+        $urgency = (int) ($context['urgency_score'] ?? match (strtolower((string) ($context['urgency'] ?? 'low'))) {
+            'high' => 8,
+            'medium' => 5,
+            default => 3,
+        });
+        $reports = max(1, (int) ($context['reports'] ?? 1));
+        $cost = (int) round($base * (0.7 + ($urgency / 10) * 0.6) * (1 + min($reports, 20) * 0.05));
+
+        return [
+            'estimated_cost_kes' => max(50_000, min(50_000_000, $cost)),
+            'cost_rationale' => 'Heuristic CDF-scale estimate from category, urgency, and related report volume.',
+            'confidence' => 0.45,
+        ];
     }
 
     private function fallbackEvaluation(string $reason): array
@@ -566,11 +698,16 @@ class Gemma4Service
     private function fallbackResponse(?string $text): array
     {
         return [
-            'translated_summary' => $text ?: 'Issue reported by citizen.',
-            'category'           => 'General',
-            'urgency'            => 'low',
-            'confidence'         => 0.4,
-            'matched_request_id' => null,
+            'translated_summary'  => $text ?: 'Issue reported by citizen.',
+            'category'            => 'General',
+            'urgency_score'       => 3,
+            'urgency'             => 'low',
+            'confidence'          => 0.4,
+            'evaluation_thoughts' => 'Fallback evaluation — AI analysis unavailable.',
+            'suggested_fix'       => 'Manual review recommended.',
+            'theme_label'         => 'Citizen reported issue',
+            'detected_language'   => 'unknown',
+            'matched_request_id'  => null,
         ];
     }
 }

@@ -6,6 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\ConstituencyRequest;
 use App\Models\User;
 use App\Services\Gemma4Service;
+<<<<<<< HEAD
+=======
+use App\Services\IssueClusterService;
+use App\Services\PriorityScoringService;
+use App\Services\BudgetOptimizerService;
+use App\Services\ResolutionVerificationService;
+>>>>>>> origin/feature/communities-clustering
 use App\Services\Telegram\TelegramLocationService;
 use App\Services\Telegram\TelegramFileService;
 use App\Services\Telegram\TelegramMessagingService;
@@ -18,17 +25,39 @@ use Throwable;
 class TelegramWebhookController extends Controller
 {
     protected Gemma4Service $gemmaService;
+<<<<<<< HEAD
+=======
+    protected IssueClusterService $clusterService;
+    protected PriorityScoringService $priorityService;
+    protected BudgetOptimizerService $budgetService;
+    protected ResolutionVerificationService $verificationService;
+>>>>>>> origin/feature/communities-clustering
     protected TelegramLocationService $locationService;
     protected TelegramFileService $fileService;
     protected TelegramMessagingService $messagingService;
 
     public function __construct(
+<<<<<<< HEAD
         Gemma4Service $gemmaService, 
+=======
+        Gemma4Service $gemmaService,
+        IssueClusterService $clusterService,
+        PriorityScoringService $priorityService,
+        BudgetOptimizerService $budgetService,
+        ResolutionVerificationService $verificationService,
+>>>>>>> origin/feature/communities-clustering
         TelegramLocationService $locationService,
         TelegramFileService $fileService,
         TelegramMessagingService $messagingService
     ) {
         $this->gemmaService = $gemmaService;
+<<<<<<< HEAD
+=======
+        $this->clusterService = $clusterService;
+        $this->priorityService = $priorityService;
+        $this->budgetService = $budgetService;
+        $this->verificationService = $verificationService;
+>>>>>>> origin/feature/communities-clustering
         $this->locationService = $locationService;
         $this->fileService = $fileService;
         $this->messagingService = $messagingService;
@@ -69,6 +98,36 @@ class TelegramWebhookController extends Controller
 
             $userId = $user->getKey();
 
+<<<<<<< HEAD
+=======
+            // Sprint E: intercept citizen YES/NO/photo replies for pending resolution verification
+            // before /start, location gate, or rate limit turn this into a new request.
+            $pendingVerification = $this->verificationService->findPendingForUser((int) $userId);
+            if ($pendingVerification && ! str_starts_with($rawText, '/start')) {
+                $fileData = $this->fileService->downloadTelegramFile($request->all());
+                $filePath = $fileData['path'] ?? null;
+                $fileType = $fileData['type'] ?? 'text';
+                // Prefer public path for dashboard viewing when available
+                if (! empty($fileData['public_path'])) {
+                    $filePath = $fileData['public_path'];
+                }
+
+                $result = $this->verificationService->handleCitizenReply(
+                    $user,
+                    $rawText,
+                    $filePath,
+                    $fileType,
+                    ConstituencyRequest::CHANNEL_TELEGRAM
+                );
+
+                if ($result['handled']) {
+                    return response()->json([
+                        'status' => 'verification_'.$result['outcome'],
+                    ], 200);
+                }
+            }
+
+>>>>>>> origin/feature/communities-clustering
             // 1. Handle Telegram /start deep-link payload containing site coordinates token
             if (str_starts_with($rawText, '/start')) {
                 $token = trim(Str::after($rawText, '/start'));
@@ -178,6 +237,7 @@ class TelegramWebhookController extends Controller
             $confidence = (float) ($analysis['confidence'] ?? 0.4);
             $status = ConstituencyRequest::statusFromConfidence($confidence);
             $category = $analysis['category'] ?? 'General';
+<<<<<<< HEAD
 
             if ($matchedRequestId) {
                 $similarRequest = ConstituencyRequest::where('request_id', $matchedRequestId)
@@ -235,6 +295,46 @@ class TelegramWebhookController extends Controller
                 ]);
             }
 
+=======
+            $explainability = [
+                'urgency_score'       => isset($analysis['urgency_score']) ? (int) $analysis['urgency_score'] : null,
+                'evaluation_thoughts' => $analysis['evaluation_thoughts'] ?? null,
+                'suggested_fix'       => $analysis['suggested_fix'] ?? null,
+                'detected_language'   => $analysis['detected_language'] ?? null,
+            ];
+
+            $matchedRequest = null;
+            if ($matchedRequestId) {
+                $matchedRequest = ConstituencyRequest::where('request_id', $matchedRequestId)
+                    ->where('mp_id', $mpId)
+                    ->first();
+            }
+
+            // Always keep the citizen's row — matches are theme evidence, not discards.
+            $createdRequest = ConstituencyRequest::create(array_merge([
+                'user_id'          => $userId,
+                'mp_id'            => $mpId,
+                'ward_id'          => $ward->ward_id ?? null,
+                'raw_message'      => $rawText ?: 'Media upload submission',
+                'content'          => $analysis['translated_summary'] ?? ($rawText ?: 'Media upload submission'),
+                'upload_file_path' => $filePath,
+                'file_type'        => $fileType,
+                'source_channel'   => ConstituencyRequest::CHANNEL_TELEGRAM,
+                'urgency'          => $urgency,
+                'category'         => $category,
+                'confidence'       => $confidence,
+                'status'           => $status,
+                'similar_count'    => 1,
+                'cluster_ward_ids' => isset($ward->ward_id) ? [$ward->ward_id] : [],
+                'latitude'         => $latitude,
+                'longitude'        => $longitude,
+            ], $explainability));
+
+            $this->clusterService->attachRequest($createdRequest, $analysis, $matchedRequest);
+            $scored = $this->priorityService->score($createdRequest->fresh(['cluster', 'mp', 'ward.constituency']));
+            $this->budgetService->ensureCost($scored, false);
+
+>>>>>>> origin/feature/communities-clustering
             $mpName = $mp->mp_name ?? 'your MP';
             $constituencyName = $constituency->name ?? '';
             $wardName = $ward->name ?? '';

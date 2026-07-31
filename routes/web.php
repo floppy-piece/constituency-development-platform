@@ -47,6 +47,10 @@ Route::prefix('mp')->group(function () {
         return view('mp.hotspots');
     })->name('mp.hotspots');
 
+    Route::get('/priorities', [MpController::class, 'prioritiesView'])->name('mp.priorities');
+
+    Route::get('/requests', [MpController::class, 'requestsView'])->name('mp.requests');
+
     Route::get('/matrix', [MpController::class, 'matrixView'])->name('mp.matrix');
     // MP Profile View Shell
     Route::get('/profile/show', function () {

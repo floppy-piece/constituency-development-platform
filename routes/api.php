@@ -56,6 +56,15 @@ Route::prefix('mp')->group(function () {
         Route::get('/dashboard', [MpController::class, 'dashboard']);
         Route::get('/issues', [MpController::class, 'getIssues']);
         Route::get('/hotspots', [MpController::class, 'getDemandHotspots']);
+        Route::get('/priorities', [MpController::class, 'getPriorities']);
+        Route::post('/priorities/reorder', [MpController::class, 'reorderPriorities']);
+        Route::post('/priorities/lock', [MpController::class, 'lockPriorities']);
+        Route::post('/priorities/rescore', [MpController::class, 'rescorePriorities']);
+        Route::post('/priorities/budget', [MpController::class, 'updateBudget']);
+        Route::post('/priorities/budget-bundle', [MpController::class, 'budgetBundle']);
+        Route::post('/priorities/refresh-costs', [MpController::class, 'refreshCostEstimates']);
+        Route::post('/requests/{id}/override-priority', [MpController::class, 'overridePriority'])
+            ->whereNumber('id');
 
         // MP Profile Management
         Route::prefix('profile')->group(function () {
@@ -66,26 +75,19 @@ Route::prefix('mp')->group(function () {
 
 
         Route::get('/analytics/data', [MpController::class, 'getAnalyticsData']);
-        // Resolve Request API Endpoint (for Alpine.js)
-        // GET request details
+
         Route::get('/requests/{id}', function ($id) {
-            $request = ConstituencyRequest::findOrFail($id);
+            $mp = auth('mp_api')->user();
+            $request = \App\Models\ConstituencyRequest::where('mp_id', $mp->mp_id)
+                ->findOrFail($id);
+
             return response()->json($request);
         })->whereNumber('id');
 
-        // POST resolve request
-        Route::post('/requests/{id}/resolve', function ($id) {
-            $mp = auth('mp_api')->user();
-            
-            $requestItem = \App\Models\ConstituencyRequest::where('mp_id', $mp->mp_id)
-                ->findOrFail($id);
-            
-            $requestItem->update(['status' => 'resolved']);
+        Route::post('/requests/{id}/status', [MpController::class, 'updateStatus'])
+            ->whereNumber('id');
 
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'Request marked as resolved!'
-            ]);
-        })->whereNumber('id');
+        Route::post('/requests/{id}/resolve', [MpController::class, 'markAsResolved'])
+            ->whereNumber('id');
     });
 });
