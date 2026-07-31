@@ -22,7 +22,7 @@ class Gemma4Service
         $this->primaryModel = config('services.gemma.model', 'gemma-4-31b-it');
         
         // Lightweight audio-capable model specifically for transcribing voice clips
-        $this->audioModel = config('services.gemma.audio_model', 'gemma-4-12b');
+        $this->audioModel = "gemini-2.5-flash";
 
         $this->endpoint = config(
             'services.gemma.endpoint',
