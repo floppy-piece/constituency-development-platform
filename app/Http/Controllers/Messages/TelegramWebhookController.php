@@ -6,13 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\ConstituencyRequest;
 use App\Models\User;
 use App\Services\Gemma4Service;
-<<<<<<< HEAD
-=======
 use App\Services\IssueClusterService;
 use App\Services\PriorityScoringService;
 use App\Services\BudgetOptimizerService;
 use App\Services\ResolutionVerificationService;
->>>>>>> origin/feature/communities-clustering
 use App\Services\Telegram\TelegramLocationService;
 use App\Services\Telegram\TelegramFileService;
 use App\Services\Telegram\TelegramMessagingService;
@@ -25,39 +22,29 @@ use Throwable;
 class TelegramWebhookController extends Controller
 {
     protected Gemma4Service $gemmaService;
-<<<<<<< HEAD
-=======
     protected IssueClusterService $clusterService;
     protected PriorityScoringService $priorityService;
     protected BudgetOptimizerService $budgetService;
     protected ResolutionVerificationService $verificationService;
->>>>>>> origin/feature/communities-clustering
     protected TelegramLocationService $locationService;
     protected TelegramFileService $fileService;
     protected TelegramMessagingService $messagingService;
 
     public function __construct(
-<<<<<<< HEAD
-        Gemma4Service $gemmaService, 
-=======
         Gemma4Service $gemmaService,
         IssueClusterService $clusterService,
         PriorityScoringService $priorityService,
         BudgetOptimizerService $budgetService,
         ResolutionVerificationService $verificationService,
->>>>>>> origin/feature/communities-clustering
         TelegramLocationService $locationService,
         TelegramFileService $fileService,
         TelegramMessagingService $messagingService
     ) {
         $this->gemmaService = $gemmaService;
-<<<<<<< HEAD
-=======
         $this->clusterService = $clusterService;
         $this->priorityService = $priorityService;
         $this->budgetService = $budgetService;
         $this->verificationService = $verificationService;
->>>>>>> origin/feature/communities-clustering
         $this->locationService = $locationService;
         $this->fileService = $fileService;
         $this->messagingService = $messagingService;
@@ -234,65 +221,6 @@ class TelegramWebhookController extends Controller
             $confidence = (float) ($analysis['confidence'] ?? 0.4);
             $status = ConstituencyRequest::statusFromConfidence($confidence);
             $category = $analysis['category'] ?? 'General';
-<<<<<<< HEAD
-
-            if ($matchedRequestId) {
-                $similarRequest = ConstituencyRequest::where('request_id', $matchedRequestId)
-                    ->where('mp_id', $mpId)
-                    ->first();
-
-                if ($similarRequest) {
-                    $clusterWardIds = $similarRequest->cluster_ward_ids ?? [];
-                    if (!is_array($clusterWardIds)) {
-                        $clusterWardIds = [];
-                    }
-                    if ($ward->ward_id ?? null) {
-                        $clusterWardIds = array_values(array_unique(array_merge($clusterWardIds, [$ward->ward_id])));
-                    }
-
-                    $similarRequest->increment('similar_count');
-                    $similarRequest->cluster_ward_ids = $clusterWardIds;
-                    $similarRequest->save();
-                } else {
-                    ConstituencyRequest::create([
-                        'user_id'          => $userId,
-                        'mp_id'            => $mpId,
-                        'ward_id'          => $ward->ward_id ?? null,
-                        'raw_message'      => $rawText ?: 'Media upload submission',
-                        'content'          => $analysis['translated_summary'] ?? ($rawText ?: 'Media upload submission'),
-                        'upload_file_path' => $filePath,
-                        'file_type'        => $fileType,
-                        'urgency'          => $urgency,
-                        'category'         => $category,
-                        'confidence'       => $confidence,
-                        'status'           => $status,
-                        'similar_count'    => 1,
-                        'cluster_ward_ids' => isset($ward->ward_id) ? [$ward->ward_id] : [],
-                        'latitude'         => $latitude,
-                        'longitude'        => $longitude,
-                    ]);
-                }
-            } else {
-                ConstituencyRequest::create([
-                    'user_id'          => $userId,
-                    'mp_id'            => $mpId,
-                    'ward_id'          => $ward->ward_id ?? null,
-                    'raw_message'      => $rawText ?: 'Media upload submission',
-                    'content'          => $analysis['translated_summary'] ?? ($rawText ?: 'Media upload submission'),
-                    'upload_file_path' => $filePath,
-                    'file_type'        => $fileType,
-                    'urgency'          => $urgency,
-                    'category'         => $category,
-                    'confidence'       => $confidence,
-                    'status'           => $status,
-                    'similar_count'    => 1,
-                    'cluster_ward_ids' => isset($ward->ward_id) ? [$ward->ward_id] : [],
-                    'latitude'         => $latitude,
-                    'longitude'        => $longitude,
-                ]);
-            }
-
-=======
             $explainability = [
                 'urgency_score'       => isset($analysis['urgency_score']) ? (int) $analysis['urgency_score'] : null,
                 'evaluation_thoughts' => $analysis['evaluation_thoughts'] ?? null,
@@ -331,7 +259,6 @@ class TelegramWebhookController extends Controller
             $scored = $this->priorityService->score($createdRequest->fresh(['cluster', 'mp', 'ward.constituency']));
             $this->budgetService->ensureCost($scored, false);
 
->>>>>>> origin/feature/communities-clustering
             $mpName = $mp->mp_name ?? 'your MP';
             $constituencyName = $constituency->name ?? '';
             $wardName = $ward->name ?? '';

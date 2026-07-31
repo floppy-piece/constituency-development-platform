@@ -35,21 +35,6 @@ class MpController extends Controller
 
         $mpId = $mp->mp_id ?? $mp->id;
 
-<<<<<<< HEAD
-        $totalRequests = ConstituentRequest::where('mp_id', $mpId)->count();
-        $highUrgencyRequests = ConstituentRequest::where('mp_id', $mpId)
-            ->where('urgency', 'high')
-            ->count();
-
-        // Fetch ALL constituent requests tied to this MP
-        $recentRequests = ConstituentRequest::with('user:user_id,phone_number')
-            ->where('mp_id', $mpId)
-            ->latest('created_at')
-            ->get()
-            ->map(function ($req, $index) {
-                // Aligned with model primary key 'request_id'
-                $id = $req->request_id ?? $req->id ?? ($index + 1);
-=======
         $activeScope = function ($q) {
             $q->where('status', '!=', ConstituentRequest::STATUS_RESOLVED)
                 ->orWhere(function ($q2) {
@@ -92,16 +77,10 @@ class MpController extends Controller
                 $clusterSummary = $cluster
                     ? $cluster->summaryLine($cluster->ward?->name)
                     : null;
->>>>>>> origin/feature/communities-clustering
 
                 return [
                     'id' => $id,
                     'request_id' => $id,
-<<<<<<< HEAD
-                    'urgency' => $req->urgency ?? 'low',
-                    'category' => $req->category ?? $req->primary_topic ?? 'General',
-                    'file_type' => $req->file_type ?? 'text',
-=======
                     'display_rank' => $index + 1,
                     'urgency' => $req->urgency ?? 'low',
                     'urgency_score' => $req->urgency_score,
@@ -112,15 +91,12 @@ class MpController extends Controller
                     'category' => $req->category ?? $req->primary_topic ?? 'General',
                     'file_type' => $req->file_type ?? 'text',
                     'source_channel' => $req->source_channel,
->>>>>>> origin/feature/communities-clustering
                     'upload_file_path' => $req->upload_file_path ?? null,
                     'content' => $req->content ?? $req->raw_message,
                     'raw_message' => $req->raw_message ?? $req->content,
                     'created_at' => $req->created_at ? $req->created_at->toIso8601String() : null,
                     'latitude' => $req->latitude,
                     'longitude' => $req->longitude,
-<<<<<<< HEAD
-=======
                     'status' => $req->status ?? ConstituentRequest::STATUS_PENDING,
                     'confidence' => $req->confidence,
                     'detected_language' => $req->detected_language,
@@ -138,7 +114,6 @@ class MpController extends Controller
                     'verified_at' => $req->verified_at?->toIso8601String(),
                     'verification_note' => $req->verification_note,
                     'verification_file_path' => $req->verification_file_path,
->>>>>>> origin/feature/communities-clustering
                     'user' => [
                         'phone_number' => $req->user?->phone_number ?? 'N/A',
                     ],
@@ -146,8 +121,6 @@ class MpController extends Controller
                 ];
             });
 
-<<<<<<< HEAD
-=======
 
         $sectors = collect($recentRequests)
             ->groupBy(fn ($req) => $this->normalizeSector($req['category'] ?? 'General'))
@@ -170,7 +143,6 @@ class MpController extends Controller
             ->values()
             ->all();
 
->>>>>>> origin/feature/communities-clustering
         return response()->json([
             'status' => 'success',
             'mp_info' => [
@@ -179,34 +151,22 @@ class MpController extends Controller
                 'email' => $mp->email,
                 'constituency' => $mp->constituency_name ?? $mp->constituency,
                 'avatar' => $mp->avatar_path ? asset($mp->avatar_path) : null,
-<<<<<<< HEAD
-=======
                 'priorities_locked' => $mp->priorities_locked_at !== null,
->>>>>>> origin/feature/communities-clustering
             ],
             'metrics' => [
                 'total_requests' => $totalRequests,
                 'high_urgency_requests' => $highUrgencyRequests,
-<<<<<<< HEAD
-            ],
-            'recent_requests' => $recentRequests,
-=======
                 'needs_review_count' => $needsReviewCount,
                 'awaiting_verification_count' => $awaitingVerificationCount,
                 'equity_flagged_count' => $equityFlaggedCount,
             ],
             'recent_requests' => $recentRequests,
             'sectors' => $sectors,
->>>>>>> origin/feature/communities-clustering
         ]);
     }
 
     /**
-<<<<<<< HEAD
-     * Get paginated constituent requests for the MP.
-=======
      * Get paginated constituent requests for the MP (search + filters).
->>>>>>> origin/feature/communities-clustering
      */
     public function getIssues(Request $request): JsonResponse
     {
@@ -222,28 +182,6 @@ class MpController extends Controller
 
         $mpId = $mp->mp_id ?? $mp->id;
 
-<<<<<<< HEAD
-        $query = ConstituentRequest::with('user:user_id,phone_number')
-            ->where('mp_id', $mpId);
-
-        if ($request->has('urgency')) {
-            $query->where('urgency', $request->query('urgency'));
-        }
-
-        if ($request->has('category')) {
-            $query->where('category', $request->query('category'));
-        }
-
-        if ($request->has('file_type')) {
-            $query->where('file_type', $request->query('file_type'));
-        }
-
-        $requests = $query->latest('created_at')->paginate(20);
-
-        return response()->json([
-            'status' => 'success',
-            'data' => $requests,
-=======
         $validated = $request->validate([
             'q' => 'sometimes|nullable|string|max:200',
             'urgency' => 'sometimes|nullable|string|in:low,medium,high',
@@ -483,14 +421,10 @@ class MpController extends Controller
                 'verification_status' => $requestItem->verification_status,
                 'verification' => $verification,
             ],
->>>>>>> origin/feature/communities-clustering
         ]);
     }
 
     /**
-<<<<<<< HEAD
-     * Mark a constituent request as resolved.
-=======
      * Ranked priorities board — AI recommends, MP decides.
      */
     public function getPriorities(PriorityScoringService $priorityService): JsonResponse
@@ -782,7 +716,6 @@ class MpController extends Controller
 
     /**
      * Mark a constituent request as resolved (status update only — never delete).
->>>>>>> origin/feature/communities-clustering
      */
     public function markAsResolved(int $id): JsonResponse
     {
@@ -809,13 +742,6 @@ class MpController extends Controller
             ], 404);
         }
 
-<<<<<<< HEAD
-        $requestItem->delete();
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Request marked as resolved successfully.',
-=======
         $requestItem->status = ConstituentRequest::STATUS_RESOLVED;
         $requestItem->resolved_at = now();
         $requestItem->save();
@@ -832,7 +758,6 @@ class MpController extends Controller
                 'verification_status' => $requestItem->verification_status,
                 'message_sent' => $sent,
             ],
->>>>>>> origin/feature/communities-clustering
         ]);
     }
 
@@ -903,15 +828,9 @@ class MpController extends Controller
     }
 
     /**
-<<<<<<< HEAD
-     * Map Demand Hotspots: Return GeoJSON FeatureCollection of constituent requests for GIS maps.
-     */
-    public function getDemandHotspots(Request $request): JsonResponse
-=======
      * Map Demand Hotspots: GeoJSON points + recurring theme clusters for the MP UI.
      */
     public function getDemandHotspots(Request $request, IssueClusterService $clusterService): JsonResponse
->>>>>>> origin/feature/communities-clustering
     {
         /** @var \App\Models\Mp|null $mp */
         $mp = Auth::guard('mp_api')->user();
@@ -922,37 +841,24 @@ class MpController extends Controller
 
         $mpId = $mp->mp_id ?? $mp->id;
 
-<<<<<<< HEAD
-        // Fetch requests that have latitude & longitude coordinates
-        $requests = ConstituentRequest::where('mp_id', $mpId)
-=======
         $themes = $clusterService->themesForMp($mpId);
 
         // Fetch open requests that have latitude & longitude coordinates
         $requests = ConstituentRequest::with('cluster')
             ->where('mp_id', $mpId)
             ->where('status', '!=', ConstituentRequest::STATUS_RESOLVED)
->>>>>>> origin/feature/communities-clustering
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
             ->get();
 
         $features = $requests->map(function ($item) {
-<<<<<<< HEAD
-            // Determine map weight based on urgency and recurring reports count
-=======
             $reportCount = (int) ($item->cluster?->report_count ?? $item->similar_count ?? 1);
 
->>>>>>> origin/feature/communities-clustering
             $weight = match (strtolower($item->urgency ?? 'low')) {
                 'high' => 3,
                 'medium' => 2,
                 default => 1,
-<<<<<<< HEAD
-            } * ($item->similarity_hash ?? 1);
-=======
             } * max(1, $reportCount);
->>>>>>> origin/feature/communities-clustering
 
             return [
                 'type' => 'Feature',
@@ -962,30 +868,18 @@ class MpController extends Controller
                 ],
                 'properties' => [
                     'request_id' => $item->request_id,
-<<<<<<< HEAD
-                    'summary' => $item->content,
-                    'category' => $item->category ?? 'General',
-                    'urgency' => $item->urgency,
-                    'reports_count' => $item->similarity_hash ?? 1,
-=======
                     'cluster_id' => $item->cluster_id,
                     'summary' => $item->content,
                     'theme_label' => $item->cluster?->theme_label,
                     'category' => $item->category ?? 'General',
                     'urgency' => $item->urgency,
                     'reports_count' => $reportCount,
->>>>>>> origin/feature/communities-clustering
                     'heatmap_intensity' => min(10, $weight),
                     'created_at' => $item->created_at ? $item->created_at->toIso8601String() : null,
                 ],
             ];
         });
 
-<<<<<<< HEAD
-        return response()->json([
-            'type' => 'FeatureCollection',
-            'features' => $features,
-=======
         $clusterFeatures = $themes
             ->filter(fn ($theme) => $theme['centroid_lat'] !== null && $theme['centroid_lng'] !== null)
             ->map(function (array $theme) {
@@ -1023,7 +917,6 @@ class MpController extends Controller
                 'rising_themes' => $themes->where('trend', 'rising')->count(),
                 'total_clustered_reports' => $themes->sum('report_count'),
             ],
->>>>>>> origin/feature/communities-clustering
         ]);
     }
 
