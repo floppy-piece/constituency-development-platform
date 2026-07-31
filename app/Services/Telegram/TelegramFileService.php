@@ -95,9 +95,17 @@ class TelegramFileService
             }
 
             // 3. Save to local storage (storage/app/public/telegram_attachments)
-            $extension = pathinfo($filePath, PATHINFO_EXTENSION) ?: 'bin';
+            $extension = pathinfo($filePath, PATHINFO_EXTENSION);
+            if (empty($extension)) {
+                $extension = ($fileType === 'voice') ? 'ogg' : 'bin';
+            }
+            
             $fileName = 'tg_' . uniqid() . '.' . $extension;
             $storagePath = 'telegram_attachments/' . $fileName;
+
+            Storage::disk('public')->put($storagePath, $fileBinary->body());
+
+            return Storage::disk('public')->path($storagePath);
 
             Storage::disk('public')->put($storagePath, $fileBinary->body());
 
