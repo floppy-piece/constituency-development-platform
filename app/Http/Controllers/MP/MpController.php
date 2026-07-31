@@ -8,13 +8,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Services\Gemma4Service;
-<<<<<<< HEAD
-=======
 use App\Services\IssueClusterService;
 use App\Services\PriorityScoringService;
 use App\Services\BudgetOptimizerService;
 use App\Services\ResolutionVerificationService;
->>>>>>> origin/feature/communities-clustering
 use App\Models\ConstituencyFacility;
 use App\Http\Controllers\Controller;
 

@@ -98,8 +98,6 @@ class TelegramWebhookController extends Controller
 
             $userId = $user->getKey();
 
-<<<<<<< HEAD
-=======
             // Sprint E: intercept citizen YES/NO/photo replies for pending resolution verification
             // before /start, location gate, or rate limit turn this into a new request.
             $pendingVerification = $this->verificationService->findPendingForUser((int) $userId);
@@ -127,7 +125,6 @@ class TelegramWebhookController extends Controller
                 }
             }
 
->>>>>>> origin/feature/communities-clustering
             // 1. Handle Telegram /start deep-link payload containing site coordinates token
             if (str_starts_with($rawText, '/start')) {
                 $token = trim(Str::after($rawText, '/start'));
