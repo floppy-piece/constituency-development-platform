@@ -1,27 +1,3 @@
-@php
-    $gemma = app(\App\Services\Gemma4Service::class);
-    $locale = app()->getLocale();
-
-    // Server values are handed to the browser as a JSON island so the script block
-    // stays valid JavaScript instead of Blade-interpolated JavaScript.
-    $pageData = [
-        'csrfToken' => csrf_token(),
-        'defaultAvatar' => asset('images/default-avatar.png'),
-        'telegramBotUrl' => config('services.telegram.bot_url', 'https://t.me/constituency_development_bot'),
-        'whatsappNumber' => config('services.whatsapp.display_number'),
-        'translations' => [
-            'electedRep' => $gemma->translateContent('Your Elected Representative', $locale),
-            'nearbyReps' => $gemma->translateContent('Nearby Representatives', $locale),
-            'honorableRep' => $gemma->translateContent('Honorable Representative', $locale),
-            'constituencyLabel' => $gemma->translateContent('Constituency', $locale),
-            'localRegion' => $gemma->translateContent('Local Region', $locale),
-            'noActiveMp' => $gemma->translateContent('No active MP assigned to this constituency yet.', $locale),
-            'notice' => $gemma->translateContent('Notice', $locale),
-            'defaultError' => $gemma->translateContent('Could not match location to a constituency.', $locale),
-            'loadError' => $gemma->translateContent('Unable to load location details.', $locale),
-        ],
-    ];
-@endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
@@ -35,7 +11,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
-    <!-- @vite(['resources/js/app.js']) -->
+    @vite(['resources/js/app.js'])
 </head>
 <body class="bg-slate-900 text-white font-sans min-h-screen flex flex-col justify-between">
 
@@ -81,7 +57,7 @@
                 <div class="flex items-center space-x-4">
                     <img id="mp-avatar" 
                          src="{{ asset('images/default-avatar.png') }}" 
-                         data-fallback-src="{{ asset('images/default-avatar.png') }}"
+                         onerror="this.onerror=null;this.src='{{ asset('images/default-avatar.png') }}';"
                          class="w-20 h-20 rounded-full object-cover border-2 border-emerald-500 shadow-md" 
                          alt="@translate('MP Photo')">
                     <div>
@@ -151,18 +127,20 @@
         @translate('Powered by Civic Tech Platform') &copy; {{ date('Y') }}
     </footer>
 
-    <script type="application/json" id="page-data">@json($pageData)</script>
-
     <script>
-        const pageData = JSON.parse(document.getElementById('page-data').textContent);
-        const csrfToken = pageData.csrfToken;
-        const translations = pageData.translations;
-        const defaultAvatar = pageData.defaultAvatar;
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
-        document.getElementById('mp-avatar')?.addEventListener('error', function handleAvatarError() {
-            this.removeEventListener('error', handleAvatarError);
-            this.src = this.dataset.fallbackSrc;
-        });
+        const translations = {
+            electedRep: @json(app(\App\Services\Gemma4Service::class)->translateContent('Your Elected Representative', app()->getLocale())),
+            nearbyReps: @json(app(\App\Services\Gemma4Service::class)->translateContent('Nearby Representatives', app()->getLocale())),
+            honorableRep: @json(app(\App\Services\Gemma4Service::class)->translateContent('Honorable Representative', app()->getLocale())),
+            constituencyLabel: @json(app(\App\Services\Gemma4Service::class)->translateContent('Constituency', app()->getLocale())),
+            localRegion: @json(app(\App\Services\Gemma4Service::class)->translateContent('Local Region', app()->getLocale())),
+            noActiveMp: @json(app(\App\Services\Gemma4Service::class)->translateContent('No active MP assigned to this constituency yet.', app()->getLocale())),
+            notice: @json(app(\App\Services\Gemma4Service::class)->translateContent('Notice', app()->getLocale())),
+            defaultError: @json(app(\App\Services\Gemma4Service::class)->translateContent('Could not match location to a constituency.', app()->getLocale())),
+            loadError: @json(app(\App\Services\Gemma4Service::class)->translateContent('Unable to load location details.', app()->getLocale()))
+        };
 
         function locationLinker() {
             return {
@@ -172,8 +150,8 @@
                 lng: null,
                 wardName: '',
                 locationError: '',
-                telegramUrl: pageData.telegramBotUrl,
-                whatsappUrl: `https://wa.me/${pageData.whatsappNumber}?text=` + encodeURIComponent('Hello, I would like to submit a constituency request.'),
+                telegramUrl: "{{ config('services.telegram.bot_url', 'https://t.me/constituency_development_bot') }}",
+                whatsappUrl: "https://wa.me/{{ config('services.whatsapp.display_number') }}?text=Hello,%20I%20would%20like%20to%20submit%20a%20constituency%20request.",
 
                 captureLocation() {
                     this.loading = true;
@@ -200,13 +178,14 @@
                                     let data = await response.json();
                                     
                                     if (data.status === 'success') {
-                                        this.telegramUrl = `${pageData.telegramBotUrl}?start=${data.start_payload}`;
+                                        let baseUrl = "{{ config('services.telegram.bot_url', 'https://t.me/constituency_development_bot') }}";
+                                        this.telegramUrl = `${baseUrl}?start=${data.start_payload}`;
                                     }
                                 } catch (e) {
                                     console.error('Failed to bind location token for Telegram:', e);
                                 }
 
-                                this.whatsappUrl = `https://wa.me/${pageData.whatsappNumber}?text=` + encodeURIComponent(`[SYS_LOC:${this.lat},${this.lng}]\n\n `);
+                                this.whatsappUrl = `https://wa.me/{{ config('services.whatsapp.display_number') }}?text=` + encodeURIComponent(`[SYS_LOC:${this.lat},${this.lng}]\n\n `);
                                 this.locationCaptured = true;
                                 this.loading = false;
                                 
@@ -301,6 +280,8 @@
             document.getElementById("mp-container").classList.remove("hidden");
             document.getElementById("candidates-list").classList.add("hidden");
 
+            const defaultAvatar = "{{ asset('images/default-avatar.png') }}";
+
             if (mp) {
                 document.getElementById("mp-name").innerText = mp.mp_name || translations.honorableRep;
                 document.getElementById("mp-constituency").innerText = translations.constituencyLabel + ": " + (constituency?.name || translations.localRegion);
@@ -319,6 +300,8 @@
             const listContainer = document.getElementById("candidates-list");
             listContainer.classList.remove("hidden");
             listContainer.innerHTML = `<p class="text-xs text-slate-400 mb-2">${message}</p>`;
+
+            const defaultAvatar = "{{ asset('images/default-avatar.png') }}";
 
             mps.forEach(mp => {
                 const item = document.createElement("div");
