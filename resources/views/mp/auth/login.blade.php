@@ -1,23 +1,26 @@
 <x-layout title="MP Login">
-    <div class="min-h-screen flex items-center justify-center bg-slate-950 p-4" x-data="loginForm()">
-        <div class="w-full max-w-md bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl">
-            <h2 class="text-2xl font-bold text-slate-100 text-center mb-6">MP Portal Login</h2>
+    <div class="min-h-[80vh] flex items-center justify-center p-4" x-data="loginForm()">
+        <div class="w-full max-w-md torn-card p-8 shadow-xl animate__animated animate__fadeIn">
+            <div class="text-center mb-6 border-b border-stone-300 pb-4">
+                <span class="font-typewriter text-[9px] uppercase tracking-widest text-stone-700 block mb-1">Official Authentication Record</span>
+                <h2 class="text-xl font-bold text-stone-900 font-typewriter uppercase tracking-wide">§ MP Portal Login</h2>
+            </div>
 
             <!-- Error Banner -->
-            <div x-show="errorMessage" x-text="errorMessage" class="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl" style="display: none;"></div>
+            <div x-show="errorMessage" x-text="errorMessage" class="mb-4 p-3 bg-red-100 border border-red-300 text-red-800 text-xs rounded font-typewriter" style="display: none;"></div>
 
-            <form @submit.prevent="submitLogin()" class="space-y-5">
+            <form @submit.prevent="submitLogin()" class="space-y-5 font-typewriter text-xs">
                 <div>
-                    <label class="block text-xs uppercase tracking-wider text-slate-400 mb-2 font-semibold">Email Address</label>
-                    <input type="email" x-model="email" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-emerald-500 transition" placeholder="mp@constituency.gov">
+                    <label class="block uppercase tracking-wider text-stone-700 mb-2 font-semibold">Email Address</label>
+                    <input type="email" x-model="email" required class="w-full bg-[#fffaf0] border border-stone-400/60 rounded px-4 py-3 text-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-600 transition shadow-inner" placeholder="mp@constituency.gov">
                 </div>
 
                 <div>
-                    <label class="block text-xs uppercase tracking-wider text-slate-400 mb-2 font-semibold">Password</label>
-                    <input type="password" x-model="password" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-emerald-500 transition" placeholder="••••••••">
+                    <label class="block uppercase tracking-wider text-stone-700 mb-2 font-semibold">Password</label>
+                    <input type="password" x-model="password" required class="w-full bg-[#fffaf0] border border-stone-400/60 rounded px-4 py-3 text-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-600 transition shadow-inner" placeholder="••••••••">
                 </div>
 
-                <button type="submit" :disabled="loading" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3 rounded-xl transition flex justify-center items-center">
+                <button type="submit" :disabled="loading" class="w-full bg-[#524940] hover:bg-[#3d362f] text-stone-100 font-bold py-3 rounded transition flex justify-center items-center shadow-md disabled:opacity-50">
                     <span x-show="!loading">Sign In</span>
                     <span x-show="loading" style="display: none;">Authenticating...</span>
                 </button>

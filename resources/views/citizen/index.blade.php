@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,45 +11,165 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    
+    <!-- Google Fonts for Classic Ledger/Book Typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=Courier+Prime&display=swap" rel="stylesheet">
+
+    <style>
+        .font-ledger { font-family: 'Newsreader', Georgia, serif; }
+        .font-typewriter { font-family: 'Courier Prime', Courier, monospace; }
+        .font-stamp { font-family: 'Special Elite', cursive; }
+
+        /* Warm Cream / Antique Ivory Desk Background */
+        body {
+            background-color: #f2eee3;
+            background-image: radial-gradient(#dcd5c1 1px, transparent 1px), radial-gradient(#dcd5c1 1px, #f2eee3 1px);
+            background-size: 40px 40px;
+            background-position: 0 0, 20px 20px;
+        }
+
+        /* Main Container Sheet with Blurry Kenyan Flag Watermark / Background */
+        .parchment-sheet {
+            position: relative;
+            background-color: rgba(215, 210, 200, 0.88);
+            color: #2c241d;
+            box-shadow: inset 0 0 50px rgba(139, 115, 85, 0.08), 
+                        0 15px 35px rgba(0, 0, 0, 0.15);
+            border: 1px solid #c3c3bfff;
+            overflow: hidden;
+            opacity: 0.9;
+        }
+
+        /* Swaying / Waving Wind Animation Keyframes */
+        @keyframes flagSway {
+            0% {
+                transform: scale(1.4) skewX(0deg) translateY(0px);
+                filter: blur(45px) hue-rotate(0deg);
+            }
+            25% {
+                transform: scale(1.45) skewX(-4deg) translateY(-3px);
+                filter: blur(48px) hue-rotate(-2deg);
+            }
+            50% {
+                transform: scale(1.4) skewX(2deg) translateY(2px);
+                filter: blur(42px) hue-rotate(2deg);
+            }
+            75% {
+                transform: scale(1.42) skewX(-2deg) translateY(-1px);
+                filter: blur(46px) hue-rotate(-1deg);
+            }
+            100% {
+                transform: scale(1.4) skewX(0deg) translateY(0px);
+                filter: blur(45px) hue-rotate(0deg);
+            }
+        }
+
+        /* Blurry Kenyan Flag Abstract Layers with Wind Effect */
+        .parchment-sheet::before {
+            content: "";
+            position: absolute;
+            inset: -20px;
+            z-index: -1;
+            opacity: 1;
+            background: linear-gradient(
+                to bottom,
+                #000000 0%,
+                #000000 28%,
+                #000000 28%,
+                #ffffff 34%,
+                #ffffff 34%,
+                #bb0000 38%,
+                #bb0000 38%,
+                #bb0000 44%,
+                #ffffff 44%,
+                #ffffff 72%,
+                #006600 72%,
+                #006600 100%
+            );
+            animation: flagSway 7s ease-in-out infinite;
+            transform-origin: center;
+        }
+
+        /* Ragged Wavy Ripped Paper Cards */
+        .torn-card {
+            background-color: #ffffff;
+            color: #2c241d;
+            box-shadow: 3px 5px 15px rgba(0,0,0,0.06);
+            position: relative;
+            clip-path: polygon(
+                0% 0%, 
+                100% 1%, 
+                99% 10%, 
+                100% 20%, 
+                98% 30%, 
+                100% 40%, 
+                99% 50%, 
+                100% 60%, 
+                98% 70%, 
+                100% 80%, 
+                99% 90%, 
+                100% 100%, 
+                1% 99%, 
+                0% 90%, 
+                2% 80%, 
+                0% 70%, 
+                1% 60%, 
+                0% 50%, 
+                2% 40%, 
+                0% 30%, 
+                1% 20%, 
+                0% 10%
+            );
+        }
+    </style>
+
     @vite(['resources/js/app.js'])
 </head>
-<body class="bg-slate-900 text-white font-sans min-h-screen flex flex-col justify-between">
+<body class="font-ledger min-h-screen flex flex-col justify-between selection:bg-stone-300 selection:text-stone-900 text-[#2c241d]">
 
     <!-- Header & Language Switcher -->
-    <header class="p-4 px-6 border-b border-slate-800 backdrop-blur-md bg-slate-900/50 sticky top-0 z-50 items-center justify-between">
-        <h1 class="text-2xl font-bold text-emerald-400 tracking-wide text-center">
-        @translate('Constituency Development Platform')
-        </h1><br>
-        <hr><br>
-        <p class="text-center text-sm text-slate-300">@translate('Share your voice and get heard. Connect via Telegram or WhatsApp to send your development requests.')</p>
-        <br>
-        <!-- Language Selector Form -->
-        <form action="{{ route('language.switch') }}" method="POST" class="flex items-center justify-center gap-2">
-            @csrf
-            <label for="language-select" class="sr-only">@translate('Select Language')</label>
-            <select id="language-select" 
-                    name="language" 
-                    onchange="this.form.submit()" 
-                    class="bg-slate-800 text-slate-200 border border-slate-700 text-xs rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
-                <option value="en" {{ session('app_locale', 'en') == 'en' ? 'selected' : '' }}>English</option>
-                <option value="sw" {{ session('app_locale') == 'sw' ? 'selected' : '' }}>Kiswahili</option>
-                <option value="sheng" {{ session('app_locale') == 'sheng' ? 'selected' : '' }}>Sheng</option>
-                <option value="kikuyu" {{ session('app_locale') == 'kikuyu' ? 'selected' : '' }}>Gĩkũyũ</option>
-                <option value="luo" {{ session('app_locale') == 'luo' ? 'selected' : '' }}>Dholuo</option>
-                <option value="luhya" {{ session('app_locale') == 'luhya' ? 'selected' : '' }}>Luhya</option>
-                <option value="kalenjin" {{ session('app_locale') == 'kalenjin' ? 'selected' : '' }}>Kalenjin</option>
-                <option value="kamba" {{ session('app_locale') == 'kamba' ? 'selected' : '' }}>Kikamba</option>
-            </select>
-        </form>
+    <header class="p-5 px-8 border-b-2 border-dashed border-stone-400/40 bg-[#e6dfd1] sticky top-0 z-50 shadow-sm">
+        <div class="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+                <span class="font-typewriter text-[10px] uppercase tracking-widest text-stone-700 block">Official Gazette · Public Notice</span>
+                <h1 class="text-xl sm:text-2xl font-bold text-stone-900 font-typewriter tracking-wide">
+                    @translate('Constituency Development Platform')
+                </h1>
+            </div>
+
+            <!-- Language Selector Form -->
+            <form action="{{ route('language.switch') }}" method="POST" class="flex items-center gap-2">
+                @csrf
+                <label for="language-select" class="sr-only">@translate('Select Language')</label>
+                <select id="language-select" 
+                        name="language" 
+                        onchange="this.form.submit()" 
+                        class="bg-[#fffaf0] text-stone-900 border border-stone-400/60 text-xs rounded px-3 py-2 font-typewriter focus:outline-none focus:ring-1 focus:ring-stone-600 cursor-pointer shadow-inner">
+                    <option value="en" {{ session('app_locale', 'en') == 'en' ? 'selected' : '' }}>English</option>
+                    <option value="sw" {{ session('app_locale') == 'sw' ? 'selected' : '' }}>Kiswahili</option>
+                    <option value="sheng" {{ session('app_locale') == 'sheng' ? 'selected' : '' }}>Sheng</option>
+                    <option value="kikuyu" {{ session('app_locale') == 'kikuyu' ? 'selected' : '' }}>Gĩkũyũ</option>
+                    <option value="luo" {{ session('app_locale') == 'luo' ? 'selected' : '' }}>Dholuo</option>
+                    <option value="luhya" {{ session('app_locale') == 'luhya' ? 'selected' : '' }}>Luhya</option>
+                    <option value="kalenjin" {{ session('app_locale') == 'kalenjin' ? 'selected' : '' }}>Kalenjin</option>
+                    <option value="kamba" {{ session('app_locale') == 'kamba' ? 'selected' : '' }}>Kikamba</option>
+                </select>
+            </form>
+        </div>
+        <div class="max-w-4xl mx-auto mt-3 pt-3 border-t border-stone-400/30 text-center">
+            <p class="text-xs sm:text-sm text-stone-700 font-typewriter italic">
+                @translate('Share your voice and get heard. Connect via Telegram or WhatsApp to send your development requests.')
+            </p>
+        </div>
     </header>
 
-    <!-- Main Container -->
-    <main class="max-w-4xl mx-auto p-6 grid md:grid-cols-2 gap-8 items-start my-auto w-full">
+    <!-- Main Container Sheet with Swaying Blurry Flag Watermark -->
+    <main class="max-w-4xl mx-auto p-6 sm:p-12 my-8 w-full parchment-sheet rounded grid md:grid-cols-2 gap-8 items-start relative">
         
         <!-- MP Display Card -->
-        <div id="mp-card" class="bg-slate-800/80 rounded-2xl p-6 border border-slate-700 shadow-2xl animate__animated animate__fadeInLeft">
-            <h3 id="card-header-title" class="text-lg font-bold text-emerald-400 mb-4 border-b border-slate-700 pb-2">
-                @translate('Your Elected Representative')
+        <div id="mp-card" class="torn-card p-8 shadow-md animate__animated animate__fadeInLeft">
+            <h3 id="card-header-title" class="text-base font-bold text-stone-900 mb-4 border-b border-stone-300 pb-2 font-typewriter uppercase tracking-wide">
+                § @translate('Your Elected Representative')
             </h3>
             
             <!-- Default / Loading State -->
@@ -58,12 +178,12 @@
                     <img id="mp-avatar" 
                          src="{{ asset('images/default-avatar.png') }}" 
                          onerror="this.onerror=null;this.src='{{ asset('images/default-avatar.png') }}';"
-                         class="w-20 h-20 rounded-full object-cover border-2 border-emerald-500 shadow-md" 
+                         class="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-stone-400/50 shadow-sm sepia-[0.3]" 
                          alt="@translate('MP Photo')">
                     <div>
-                        <h4 id="mp-name" class="text-lg font-bold text-white">@translate('Detecting location...')</h4>
-                        <p id="mp-constituency" class="text-sm text-slate-400">@translate('Locating constituency...')</p>
-                        <p id="mp-email" class="text-xs text-sky-400 mt-1"></p>
+                        <h4 id="mp-name" class="text-base font-bold text-stone-900 font-ledger">@translate('Detecting location...')</h4>
+                        <p id="mp-constituency" class="text-xs text-stone-700 font-typewriter">@translate('Locating constituency...')</p>
+                        <p id="mp-email" class="text-xs text-stone-600 underline mt-1 font-typewriter"></p>
                     </div>
                 </div>
             </div>
@@ -72,50 +192,51 @@
             <div id="candidates-list" class="hidden space-y-3 mt-4"></div>
         </div>
 
-        <div x-data="locationLinker()" class="bg-slate-800/80 rounded-2xl p-6 border border-slate-700 shadow-2xl animate__animated animate__fadeInRight">
-            <h3 class="text-lg font-bold text-emerald-400 mb-2">@translate('Connect & Submit Requests')</h3>
-            <p class="text-slate-300 text-sm mb-6">@translate('Physical location coordinates are required to route your issue to the correct ward representative.')</p>
+        <!-- Connection & Location Action Box -->
+        <div x-data="locationLinker()" class="torn-card p-8 shadow-md animate__animated animate__fadeInRight">
+            <h3 class="text-base font-bold text-stone-900 mb-2 font-typewriter uppercase tracking-wide">§ @translate('Connect & Submit Requests')</h3>
+            <p class="text-stone-700 text-xs mb-6 font-typewriter">@translate('Physical location coordinates are required to route your issue to the correct ward representative.')</p>
 
             <!-- Location Capture Action -->
             <template x-if="!locationCaptured">
                 <div class="space-y-3">
                     <button @click="captureLocation()" 
                             :disabled="loading"
-                            class="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 font-bold py-3 px-4 rounded-xl transition duration-300 shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
-                        <span x-text="loading ? 'Detecting Physical Location...' : 'Share Location & Unlock Submission'"></span>
+                            class="w-full bg-[#524940] hover:bg-[#3d362f] text-stone-100 disabled:opacity-50 font-bold py-3 px-4 rounded transition duration-300 shadow-md flex items-center justify-center gap-2 font-typewriter text-xs">
+                        <svg class="w-4 h-4 text-stone-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                        <span x-text="loading ? 'Detecting Coordinates...' : 'Share Location & Unlock Submission'"></span>
                     </button>
-                    <p class="text-xs text-amber-400 text-center" x-show="locationError" x-text="locationError"></p>
+                    <p class="text-xs text-stone-700 text-center font-typewriter" x-show="locationError" x-text="locationError"></p>
                 </div>
             </template>
 
             <!-- Unlocked State with Ward & Coordinates Displayed -->
             <template x-if="locationCaptured">
                 <div class="space-y-4 animate__animated animate__fadeIn">
-                    <div class="p-3 bg-emerald-950/50 border border-emerald-800/50 text-emerald-400 rounded-xl text-xs space-y-1">
+                    <div class="p-3 bg-stone-200/60 border border-stone-300 text-stone-900 rounded text-xs space-y-1 font-typewriter">
                         <div class="flex items-center justify-between">
-                            <span>✓ Ward: <strong class="text-white" x-text="wardName || 'Locating Ward...'"></strong></span>
-                            <button @click="captureLocation()" class="underline text-emerald-300 hover:text-white text-[11px] ml-2">Update</button>
+                            <span>✓ Ward: <strong class="text-stone-950" x-text="wardName || 'Locating Ward...'"></strong></span>
+                            <button @click="captureLocation()" class="underline text-stone-700 hover:text-stone-950 text-[11px] ml-2">Update</button>
                         </div>
-                        <div class="text-[11px] text-emerald-300/80">
+                        <div class="text-[11px] text-stone-600">
                             Lat: <span x-text="lat.toFixed(4)"></span>, Lng: <span x-text="lng.toFixed(4)"></span>
                         </div>
                     </div>
                     
-                    <!-- Telegram Button passing coordinates token via start deep-link parameter -->
+                    <!-- Telegram Button -->
                     <a :href="telegramUrl" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    class="w-full inline-flex items-center justify-center gap-3 bg-sky-500 hover:bg-sky-600 text-white font-bold px-6 py-4 rounded-2xl shadow-lg transition">
-                        @translate('Submit via Telegram')
+                       target="_blank" 
+                       rel="noopener noreferrer"
+                       class="w-full inline-flex items-center justify-center gap-2 bg-[#44546a] hover:bg-[#334155] text-white font-bold px-4 py-3 rounded shadow transition font-typewriter text-xs">
+                        <span>✈</span> @translate('Submit via Telegram')
                     </a>
 
-                    <!-- WhatsApp Button passing coordinates in pre-filled message -->
+                    <!-- WhatsApp Button -->
                     <a :href="whatsappUrl" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    class="w-full inline-flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-4 rounded-2xl shadow-lg transition">
-                        @translate('Submit via WhatsApp')
+                       target="_blank" 
+                       rel="noopener noreferrer"
+                       class="w-full inline-flex items-center justify-center gap-2 bg-[#486054] hover:bg-[#3a4e44] text-white font-bold px-4 py-3 rounded shadow transition font-typewriter text-xs">
+                        <span>💬</span> @translate('Submit via WhatsApp')
                     </a>
                 </div>
             </template>
@@ -123,8 +244,8 @@
 
     </main>
 
-    <footer class="p-4 text-center text-xs text-slate-500">
-        @translate('Powered by Civic Tech Platform') &copy; {{ date('Y') }}
+    <footer class="p-6 text-center text-xs text-stone-700 font-typewriter">
+        @translate('Powered by Civic Tech Platform') &copy; {{ date('Y') }} · Republic of Kenya Record
     </footer>
 
     <script>
@@ -189,7 +310,6 @@
                                 this.locationCaptured = true;
                                 this.loading = false;
                                 
-                                // Fetch MP details and capture ward name
                                 fetchMpDetails(this.lat, this.lng, (ward) => {
                                     this.wardName = ward;
                                 });
@@ -209,7 +329,6 @@
             }
         }
 
-        // Automatically request fresh live coordinates on page load and update database immediately
         document.addEventListener("DOMContentLoaded", function () {
             if ("geolocation" in navigator) {
                 navigator.geolocation.getCurrentPosition(
@@ -221,7 +340,6 @@
 
                         sessionStorage.setItem('user_lat', lat);
                         sessionStorage.setItem('user_lng', lng);
-                        // Automatically sync to database and cache on load
                         fetch('/api/citizen/telegram-location-token', {
                             method: 'POST',
                             headers: { 
@@ -276,7 +394,7 @@
         }
 
         function displaySingleMp(mp, constituency) {
-            document.getElementById("card-header-title").innerText = translations.electedRep;
+            document.getElementById("card-header-title").innerText = "§ " + translations.electedRep;
             document.getElementById("mp-container").classList.remove("hidden");
             document.getElementById("candidates-list").classList.add("hidden");
 
@@ -294,27 +412,27 @@
         }
 
         function displayMultipleMps(mps, message) {
-            document.getElementById("card-header-title").innerText = translations.nearbyReps;
+            document.getElementById("card-header-title").innerText = "§ " + translations.nearbyReps;
             document.getElementById("mp-container").classList.add("hidden");
             
             const listContainer = document.getElementById("candidates-list");
             listContainer.classList.remove("hidden");
-            listContainer.innerHTML = `<p class="text-xs text-slate-400 mb-2">${message}</p>`;
+            listContainer.innerHTML = `<p class="text-xs text-stone-700 mb-2 font-typewriter">${message}</p>`;
 
             const defaultAvatar = "{{ asset('images/default-avatar.png') }}";
 
             mps.forEach(mp => {
                 const item = document.createElement("div");
-                item.className = "flex items-center space-x-3 p-3 bg-slate-900/60 rounded-xl border border-slate-700/50";
+                item.className = "flex items-center space-x-3 p-3 bg-[#fffaf0] rounded border border-stone-300";
                 
                 const avatar = mp.avatar_path || defaultAvatar;
                 
                 item.innerHTML = `
-                    <img src="${avatar}" onerror="this.src='${defaultAvatar}'" class="w-12 h-12 rounded-full object-cover border border-emerald-500" alt="Avatar">
+                    <img src="${avatar}" onerror="this.src='${defaultAvatar}'" class="w-12 h-12 rounded-full object-cover border border-stone-400 sepia-[0.3]" alt="Avatar">
                     <div>
-                        <h5 class="text-sm font-bold text-white">${mp.mp_name}</h5>
-                        <p class="text-xs text-emerald-400">${mp.constituency_name || ''}</p>
-                        <p class="text-xs text-slate-400">${mp.email || ''}</p>
+                        <h5 class="text-xs font-bold text-stone-900 font-ledger">${mp.mp_name}</h5>
+                        <p class="text-[11px] text-stone-700 font-typewriter">${mp.constituency_name || ''}</p>
+                        <p class="text-[10px] text-stone-600 font-typewriter">${mp.email || ''}</p>
                     </div>
                 `;
                 listContainer.appendChild(item);
