@@ -32,13 +32,12 @@
         /* Main Container Sheet with Left-Side Spiral Binding Integration */
         .parchment-sheet {
             position: relative;
-            background-color: inherit;
+            background-color: #f2eee3;
             color: #0d0c0cff;
             box-shadow: inset 0 0 50px rgba(243, 239, 235, 0.08), 
                         0 15px 35px rgba(0, 0, 0, 0.15);
             border: none;
             overflow: visible; /* Allow spiral loops to extend outside on the left */
-            opacity: 0.9;
             padding-left: calc(3rem + 15px); /* Extra spacing on the left for the spiral loops */
         }
 
@@ -97,10 +96,10 @@
             position: absolute;
             inset: -20px;
             z-index: -1;
-            opacity: 0.05;
+            opacity: 0.5;
             background: linear-gradient(
                 to bottom,
-                #000000 0%,
+                #000000 10%,
                 #000000 18%,
                 #000000 28%,
                 #ffffff 40%,
