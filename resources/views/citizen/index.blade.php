@@ -97,7 +97,7 @@
             position: absolute;
             inset: -20px;
             z-index: -1;
-            opacity: 1;
+            opacity: 0.05;
             background: linear-gradient(
                 to bottom,
                 #000000 0%,

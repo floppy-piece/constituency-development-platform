@@ -98,7 +98,7 @@
             position: absolute;
             inset: -20px;
             z-index: -1;
-            opacity: 1;
+            opacity: 0.05;
             background: linear-gradient(
                 to bottom,
                 #000000 0%,
@@ -370,10 +370,10 @@
             </main>
         </div>
 
-        <footer class="p-6 text-center text-xs text-stone-700 font-typewriter border-t border-dashed border-stone-400/40 bg-[#e6dfd1]/50 mt-auto">
+        
+    </div>
+        <footer class="p-6 text-center text-xs text-stone-700 font-typewriter border-t border-dashed border-stone-400/40 mt-auto" style="background-color:#f2eee3;">
             Powered by Civic Tech Platform &copy; {{ date('Y') }} · Republic of Kenya Record
         </footer>
-    </div>
-
 </body>
 </html>
