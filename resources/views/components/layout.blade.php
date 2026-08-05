@@ -30,16 +30,42 @@
             background-position: 0 0, 20px 20px;
         }
 
-        /* Main Container Sheet with Swaying Blurry Kenyan Flag Watermark / Background */
+        /* Main Container Sheet with Left-Side Spiral Binding Integration */
         .parchment-sheet {
             position: relative;
             background-color: rgba(215, 210, 200, 0.88);
             color: #2c241d;
             box-shadow: inset 0 0 50px rgba(139, 115, 85, 0.08), 
                         0 15px 35px rgba(0, 0, 0, 0.15);
-            border: 1px solid #c3c3bfff;
-            overflow: hidden;
+            border: none;
+            overflow: visible; /* Allow spiral loops to extend outside on the left */
             opacity: 0.9;
+            padding-left: calc(3rem + 15px); /* Extra spacing on the left for the spiral loops */
+        }
+
+        /* Left-Side Spiral Binding Graphic Pseudo-element */
+        .parchment-sheet::after {
+            content: "";
+            position: absolute;
+            top: 20px;
+            bottom: 20px;
+            left: -14px;
+            width: 20px;
+            /* Repeating gradient simulating white wire spiral binding loops vertically */
+            background: repeating-linear-gradient(
+                180deg,
+                transparent,
+                transparent 12px,
+                #ffffff 12px,
+                #ffffff 16px,
+                #d1d5db 16px,
+                #d1d5db 18px,
+                transparent 18px,
+                transparent 28px
+            );
+            z-index: 20;
+            pointer-events: none;
+            filter: drop-shadow(-3px 0 2px rgba(0,0,0,0.25));
         }
 
         /* Swaying / Waving Wind Animation Keyframes */
@@ -76,14 +102,13 @@
             background: linear-gradient(
                 to bottom,
                 #000000 0%,
+                #000000 18%,
                 #000000 28%,
-                #000000 28%,
-                #ffffff 34%,
-                #ffffff 34%,
-                #bb0000 38%,
-                #bb0000 38%,
-                #bb0000 44%,
-                #ffffff 44%,
+                #ffffff 40%,
+                #ffffff 40%,
+                #bb0000 58%,
+                #bb0000 62%,
+                #ffffff 68%,
                 #ffffff 72%,
                 #006600 72%,
                 #006600 100%
@@ -122,6 +147,42 @@
                 1% 20%, 
                 0% 10%
             );
+        }
+
+        /* Ripped Paper Right Edge for Sidebar */
+        .sidebar-torn-edge {
+            background-color: #e6dfd1;
+            clip-path: polygon(
+                0% 0%, 
+                99% 0%, 
+                100% 4%, 
+                98% 8%, 
+                100% 12%, 
+                97% 16%, 
+                100% 20%, 
+                98% 24%, 
+                100% 28%, 
+                97% 32%, 
+                100% 36%, 
+                98% 40%, 
+                100% 44%, 
+                97% 48%, 
+                100% 52%, 
+                98% 56%, 
+                100% 60%, 
+                97% 64%, 
+                100% 68%, 
+                98% 72%, 
+                100% 76%, 
+                97% 80%, 
+                100% 84%, 
+                98% 88%, 
+                100% 92%, 
+                97% 96%, 
+                100% 100%, 
+                0% 100%
+            );
+            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.12);
         }
     </style>
 
@@ -186,14 +247,14 @@
         
         <div class="{{ !$isLoginPage ? 'flex' : '' }} flex-1">
             @unless($isLoginPage)
-                <!-- Sidebar Navigation (Hidden on Login) -->
+                <!-- Sidebar Navigation with Ripped Book Edge (Hidden on Login) -->
                 <aside 
-                    class="w-64 bg-[#e6dfd1] h-screen p-6 border-r border-dashed border-stone-400/40 flex flex-col justify-between fixed left-0 top-0 z-20 transition-transform duration-300 ease-in-out shadow-sm"
+                    class="w-72 h-screen p-6 pr-8 flex flex-col justify-between fixed left-0 top-0 z-20 transition-transform duration-300 ease-in-out sidebar-torn-edge"
                     :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
                 >
                     <div>
                         <!-- Header -->
-                        <div class="flex items-center justify-between mb-8 pb-3 border-b border-stone-400/30">
+                        <div class="flex items-center justify-between mb-8 pb-3 border-b border-stone-400/35">
                             <div>
                                 <span class="font-typewriter text-[9px] uppercase tracking-widest text-stone-700 block">Official Gazette</span>
                                 <h1 class="text-sm font-bold text-stone-900 font-typewriter tracking-wide uppercase">Constituency Portal</h1>
@@ -275,7 +336,7 @@
                     </div>
                     
                     <!-- Logout Button -->
-                    <button @click="logout()" class="w-full text-left p-2.5 text-stone-800 hover:bg-stone-300/60 rounded transition flex items-center space-x-3 text-xs font-typewriter">
+                    <button @click="logout()" class="w-full text-left p-2.5 text-stone-800 hover:bg-stone-300/60 rounded transition flex items-center space-x-3 text-xs font-typewriter mr-4">
                         <svg class="w-4 h-4 shrink-0 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
                         </svg>
@@ -287,7 +348,7 @@
             <!-- Main Page Content wrapped in parchment-sheet container -->
             <main 
                 class="flex-1 p-6 sm:p-12 my-8 mx-6 sm:mx-auto max-w-6xl w-full parchment-sheet rounded transition-all duration-300"
-                :class="{ 'md:ml-72': sidebarOpen && {{ !$isLoginPage ? 'true' : 'false' }}, 'ml-0': !sidebarOpen || {{ $isLoginPage ? 'true' : 'false' }} }"
+                :class="{ 'md:ml-80': sidebarOpen && {{ !$isLoginPage ? 'true' : 'false' }}, 'ml-0': !sidebarOpen || {{ $isLoginPage ? 'true' : 'false' }} }"
             >
                 @unless($isLoginPage)
                     <!-- Toggle Button to show sidebar when hidden -->

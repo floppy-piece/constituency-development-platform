@@ -26,18 +26,45 @@
             background-image: radial-gradient(#dcd5c1 1px, transparent 1px), radial-gradient(#dcd5c1 1px, #f2eee3 1px);
             background-size: 40px 40px;
             background-position: 0 0, 20px 20px;
+            margin: auto;
         }
 
-        /* Main Container Sheet with Blurry Kenyan Flag Watermark / Background */
+        /* Main Container Sheet with Left-Side Spiral Binding Integration */
         .parchment-sheet {
             position: relative;
-            background-color: rgba(215, 210, 200, 0.88);
-            color: #2c241d;
-            box-shadow: inset 0 0 50px rgba(139, 115, 85, 0.08), 
+            background-color: inherit;
+            color: #0d0c0cff;
+            box-shadow: inset 0 0 50px rgba(243, 239, 235, 0.08), 
                         0 15px 35px rgba(0, 0, 0, 0.15);
-            border: 1px solid #c3c3bfff;
-            overflow: hidden;
+            border: none;
+            overflow: visible; /* Allow spiral loops to extend outside on the left */
             opacity: 0.9;
+            padding-left: calc(3rem + 15px); /* Extra spacing on the left for the spiral loops */
+        }
+
+        /* Left-Side Spiral Binding Graphic Pseudo-element */
+        .parchment-sheet::after {
+            content: "";
+            position: absolute;
+            top: 20px;
+            bottom: 20px;
+            left: -14px;
+            width: 20px;
+            /* Repeating gradient simulating white wire spiral binding loops vertically */
+            background: repeating-linear-gradient(
+                180deg,
+                transparent,
+                transparent 12px,
+                #ffffff 12px,
+                #ffffff 16px,
+                #d1d5db 16px,
+                #d1d5db 18px,
+                transparent 18px,
+                transparent 28px
+            );
+            z-index: 20;
+            pointer-events: none;
+            filter: drop-shadow(-3px 0 2px rgba(0,0,0,0.25));
         }
 
         /* Swaying / Waving Wind Animation Keyframes */
@@ -74,14 +101,13 @@
             background: linear-gradient(
                 to bottom,
                 #000000 0%,
+                #000000 18%,
                 #000000 28%,
-                #000000 28%,
-                #ffffff 34%,
-                #ffffff 34%,
-                #bb0000 38%,
-                #bb0000 38%,
-                #bb0000 44%,
-                #ffffff 44%,
+                #ffffff 40%,
+                #ffffff 40%,
+                #bb0000 58%,
+                #bb0000 62%,
+                #ffffff 68%,
                 #ffffff 72%,
                 #006600 72%,
                 #006600 100%
@@ -163,7 +189,7 @@
         </div>
     </header>
 
-    <!-- Main Container Sheet with Swaying Blurry Flag Watermark -->
+    <!-- Main Container Sheet with Left Spiral Binding and Swaying Blurry Flag Watermark -->
     <main class="max-w-4xl mx-auto p-6 sm:p-12 my-8 w-full parchment-sheet rounded grid md:grid-cols-2 gap-8 items-start relative">
         
         <!-- MP Display Card -->
