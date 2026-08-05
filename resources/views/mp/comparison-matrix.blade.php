@@ -2,39 +2,42 @@
     <div x-data="matrixPage()" x-init="initMatrix()" class="space-y-6">
         
         <!-- Header -->
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-400/40 pb-4">
             <div>
-                <h1 class="text-2xl font-bold text-slate-100">Proposal Comparison & Feasibility Matrix</h1>
-                <p class="text-sm text-slate-400">Weigh competing constituent requests against real infrastructure metrics, demographic poverty indexes, and CIDP plans.</p>
+                <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase" style="color:white;">Proposal Comparison & Feasibility Matrix</h1>
+                <p class="text-xs text-stone-700 font-typewriter mt-1" style="color:white;">Weigh competing constituent requests against real infrastructure metrics, demographic poverty indexes, and CIDP plans.</p>
             </div>
         </div>
 
         <!-- Selection Controls -->
-        <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Proposal A Selector -->
-            <div>
-                <label class="block text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2">Select Proposal A</label>
-                <select x-model="proposalA" class="w-full bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-xl p-3 focus:ring-2 focus:ring-emerald-500">
-                    <option value="">-- Choose First Proposal --</option>
-                    <template x-for="req in availableRequests" :key="req.id">
-                        <option :value="req.id" x-text="req.category + ': ' + req.content.substring(0, 50) + '...'"></option>
-                    </template>
-                </select>
+        <div class="torn-card p-6 space-y-4 border border-stone-300">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 font-typewriter">
+                <!-- Proposal A Selector -->
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-stone-700 mb-2">Select Proposal A</label>
+                    <select x-model="proposalA" class="w-full bg-white border border-stone-300 text-stone-900 text-xs rounded px-3 py-2 shadow-xs focus:outline-none focus:border-stone-500">
+                        <option value="">-- Choose First Proposal --</option>
+                        <template x-for="req in availableRequests" :key="req.id">
+                            <option :value="req.id" x-text="req.category + ': ' + req.content.substring(0, 50) + '...'"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <!-- Proposal B Selector -->
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-stone-700 mb-2">Select Proposal B</label>
+                    <select x-model="proposalB" class="w-full bg-white border border-stone-300 text-stone-900 text-xs rounded px-3 py-2 shadow-xs focus:outline-none focus:border-stone-500">
+                        <option value="">-- Choose Second Proposal --</option>
+                        <template x-for="req in availableRequests" :key="req.id">
+                            <option :value="req.id" x-text="req.category + ': ' + req.content.substring(0, 50) + '...'"></option>
+                        </template>
+                    </select>
+                </div>
             </div>
 
-            <!-- Proposal B Selector -->
-            <div>
-                <label class="block text-xs font-bold uppercase tracking-wider text-blue-400 mb-2">Select Proposal B</label>
-                <select x-model="proposalB" class="w-full bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-xl p-3 focus:ring-2 focus:ring-blue-500">
-                    <option value="">-- Choose Second Proposal --</option>
-                    <template x-for="req in availableRequests" :key="req.id">
-                        <option :value="req.id" x-text="req.category + ': ' + req.content.substring(0, 50) + '...'"></option>
-                    </template>
-                </select>
-            </div>
-
-            <div class="md:col-span-2 flex justify-end">
-                <button @click="runComparison()" :disabled="!proposalA || !proposalB || loading" class="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-sm transition">
+            <div class="flex justify-end pt-2 border-t border-stone-300 font-typewriter">
+                <button @click="runComparison()" :disabled="!proposalA || !proposalB || loading"
+                        class="px-4 py-2 bg-emerald-100 hover:bg-emerald-200 disabled:opacity-40 text-emerald-900 border border-emerald-300 font-semibold rounded text-xs transition shadow-xs">
                     <span x-show="!loading">Compare Feasibility & Objective Impact</span>
                     <span x-show="loading" style="display:none;">Calculating Matrix...</span>
                 </button>
@@ -45,36 +48,37 @@
         <template x-if="comparisonData">
             <div class="space-y-6">
                 <!-- AI Objective Winner Banner -->
-                <div class="p-6 rounded-2xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
-                     :class="comparisonData.recommended_winner === 'proposal_a' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'">
+                <div class="torn-card p-5 border border-stone-300 flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                     :class="comparisonData.recommended_winner === 'proposal_a' ? 'bg-emerald-50/50 border-emerald-300' : 'bg-sky-50/50 border-sky-300'">
                     <div class="flex items-start space-x-3">
-                        <svg class="w-6 h-6 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        <div>
-                            <span class="text-xs uppercase tracking-wider font-semibold block text-slate-400">Gemma 4 Strategic Priority Recommendation:</span>
-                            <span class="text-lg font-bold text-slate-100" x-text="comparisonData[comparisonData.recommended_winner].title"></span>
+                        <svg class="w-5 h-5 mt-0.5 shrink-0 text-stone-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <div class="font-typewriter">
+                            <span class="text-[10px] uppercase tracking-wider font-bold block text-stone-600">Gemma 4 Strategic Priority Recommendation:</span>
+                            <span class="text-sm font-bold text-stone-900" x-text="comparisonData[comparisonData.recommended_winner].title"></span>
                         </div>
                     </div>
-                    <span class="text-xs font-black uppercase tracking-widest px-3 py-1.5 rounded-full border border-current shrink-0" x-text="'+' + comparisonData.score_difference + ' Points Higher Impact (' + comparisonData.confidence_score + '% Confidence)'"></span>
+                    <span class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded border border-stone-400 bg-white text-stone-900 shrink-0 font-typewriter shadow-xs"
+                          x-text="'+' + comparisonData.score_difference + ' Points Higher Impact (' + comparisonData.confidence_score + '% Confidence)'"></span>
                 </div>
 
                 <!-- AI Deep Strategic Reasoning, Trade-Offs & Suggested Fix -->
-                <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4 shadow-lg">
-                    <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                <div class="torn-card p-5 space-y-4 border border-stone-300">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-stone-900 flex items-center gap-2 font-typewriter">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                         Gemma 4 Multi-Factor Decision Analysis
                     </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-slate-300">
-                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
-                            <span class="font-bold text-slate-200 block text-emerald-400">Strategic Rationale</span>
-                            <p class="leading-relaxed" x-text="comparisonData.ai_reasoning"></p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-typewriter">
+                        <div class="bg-white p-4 rounded border border-stone-300 space-y-2 shadow-xs">
+                            <span class="font-bold text-stone-900 block text-emerald-900 uppercase text-[10px]">Strategic Rationale</span>
+                            <p class="leading-relaxed text-stone-700 font-ledger" x-text="comparisonData.ai_reasoning"></p>
                         </div>
-                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
-                            <span class="font-bold text-slate-200 block text-blue-400">Trade-Off Analysis</span>
-                            <p class="leading-relaxed" x-text="comparisonData.trade_off_analysis"></p>
+                        <div class="bg-white p-4 rounded border border-stone-300 space-y-2 shadow-xs">
+                            <span class="font-bold text-stone-900 block text-sky-900 uppercase text-[10px]">Trade-Off Analysis</span>
+                            <p class="leading-relaxed text-stone-700 font-ledger" x-text="comparisonData.trade_off_analysis"></p>
                         </div>
-                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
-                            <span class="font-bold text-slate-200 block text-amber-400">AI Suggested Resolution & Fix</span>
-                            <p class="leading-relaxed" x-text="comparisonData.suggested_fix"></p>
+                        <div class="bg-white p-4 rounded border border-stone-300 space-y-2 shadow-xs">
+                            <span class="font-bold text-stone-900 block text-amber-900 uppercase text-[10px]">AI Suggested Resolution & Fix</span>
+                            <p class="leading-relaxed text-stone-700 font-ledger" x-text="comparisonData.suggested_fix"></p>
                         </div>
                     </div>
                 </div>
@@ -83,101 +87,101 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     
                     <!-- Proposal A Details -->
-                    <div class="bg-slate-900 border rounded-2xl p-6 space-y-4" :class="comparisonData.recommended_winner === 'proposal_a' ? 'border-emerald-500' : 'border-slate-800'">
-                        <div class="flex justify-between items-start">
-                            <span class="text-xs font-bold text-emerald-400 uppercase tracking-widest">Proposal A</span>
-                            <span class="text-2xl font-black text-slate-100" x-text="comparisonData.proposal_a.score + '/100'"></span>
+                    <div class="torn-card p-5 space-y-4 border border-stone-300 shadow-sm" :class="comparisonData.recommended_winner === 'proposal_a' ? 'border-2 border-emerald-600 bg-emerald-50/20' : ''">
+                        <div class="flex justify-between items-start font-typewriter">
+                            <span class="text-[10px] font-bold text-emerald-900 uppercase tracking-widest bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded">Proposal A</span>
+                            <span class="text-xl font-black text-stone-900" x-text="comparisonData.proposal_a.score + '/100'"></span>
                         </div>
-                        <h3 class="text-lg font-bold text-slate-100" x-text="comparisonData.proposal_a.title"></h3>
+                        <h3 class="text-sm font-bold text-stone-900 font-typewriter" x-text="comparisonData.proposal_a.title"></h3>
 
-                        <div class="space-y-2 text-xs text-slate-300 pt-2 border-t border-slate-800">
+                        <div class="space-y-2 text-xs text-stone-700 pt-2 border-t border-stone-300 font-typewriter">
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Citizen Reports (Demand):</span>
-                                <span class="font-bold text-slate-100" x-text="comparisonData.proposal_a.citizen_reports + ' citizens'"></span>
+                                <span class="text-stone-600">Citizen Reports (Demand):</span>
+                                <span class="font-bold text-stone-900 font-ledger" x-text="comparisonData.proposal_a.citizen_reports + ' citizens'"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Linked Facility:</span>
-                                <span class="font-bold text-slate-100" x-text="comparisonData.proposal_a.facility_name"></span>
+                                <span class="text-stone-600">Linked Facility:</span>
+                                <span class="font-bold text-stone-900 font-ledger" x-text="comparisonData.proposal_a.facility_name"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Current Capacity:</span>
-                                <span class="font-bold text-slate-100" x-text="comparisonData.proposal_a.capacity"></span>
+                                <span class="text-stone-600">Current Capacity:</span>
+                                <span class="font-bold text-stone-900 font-ledger" x-text="comparisonData.proposal_a.capacity"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Current Enrollment:</span>
-                                <span class="font-bold text-slate-100" x-text="comparisonData.proposal_a.enrollment"></span>
+                                <span class="text-stone-600">Current Enrollment:</span>
+                                <span class="font-bold text-stone-900 font-ledger" x-text="comparisonData.proposal_a.enrollment"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Avg Travel Distance:</span>
-                                <span class="font-bold text-slate-100" x-text="comparisonData.proposal_a.avg_travel_distance_km + ' km'"></span>
+                                <span class="text-stone-600">Avg Travel Distance:</span>
+                                <span class="font-bold text-stone-900 font-ledger" x-text="comparisonData.proposal_a.avg_travel_distance_km + ' km'"></span>
                             </div>
                             <!-- Budget & Period Metrics -->
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Estimated Budget:</span>
-                                <span class="font-bold text-emerald-400" x-text="comparisonData.proposal_a.estimated_budget_kes"></span>
+                                <span class="text-stone-600">Estimated Budget:</span>
+                                <span class="font-bold text-emerald-900 font-ledger" x-text="comparisonData.proposal_a.estimated_budget_kes"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Implementation Period:</span>
-                                <span class="font-bold text-slate-100" x-text="comparisonData.proposal_a.implementation_period"></span>
+                                <span class="text-stone-600">Implementation Period:</span>
+                                <span class="font-bold text-stone-900 font-ledger" x-text="comparisonData.proposal_a.implementation_period"></span>
                             </div>
                             <!-- Demographic & CIDP Information -->
-                            <div class="flex justify-between pt-1 border-t border-slate-800/60">
-                                <span class="text-slate-500">Poverty Index Score:</span>
-                                <span class="font-bold text-amber-400" x-text="comparisonData.proposal_a.poverty_index_score"></span>
+                            <div class="flex justify-between pt-1 border-t border-stone-300/60">
+                                <span class="text-stone-600">Poverty Index Score:</span>
+                                <span class="font-bold text-amber-900 font-ledger" x-text="comparisonData.proposal_a.poverty_index_score"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Listed in Local Dev Plan (CIDP):</span>
-                                <span class="font-bold" :class="comparisonData.proposal_a.is_in_cidp_plan ? 'text-emerald-400' : 'text-slate-400'" x-text="comparisonData.proposal_a.is_in_cidp_plan ? 'Yes (Priority Target)' : 'No'"></span>
+                                <span class="text-stone-600">Listed in Local Dev Plan (CIDP):</span>
+                                <span class="font-bold font-ledger" :class="comparisonData.proposal_a.is_in_cidp_plan ? 'text-emerald-900' : 'text-stone-600'" x-text="comparisonData.proposal_a.is_in_cidp_plan ? 'Yes (Priority Target)' : 'No'"></span>
                             </div>
                         </div>
                     </div>
 
                     <!-- Proposal B Details -->
-                    <div class="bg-slate-900 border rounded-2xl p-6 space-y-4" :class="comparisonData.recommended_winner === 'proposal_b' ? 'border-blue-500' : 'border-slate-800'">
-                        <div class="flex justify-between items-start">
-                            <span class="text-xs font-bold text-blue-400 uppercase tracking-widest">Proposal B</span>
-                            <span class="text-2xl font-black text-slate-100" x-text="comparisonData.proposal_b.score + '/100'"></span>
+                    <div class="torn-card p-5 space-y-4 border border-stone-300 shadow-sm" :class="comparisonData.recommended_winner === 'proposal_b' ? 'border-2 border-sky-600 bg-sky-50/20' : ''">
+                        <div class="flex justify-between items-start font-typewriter">
+                            <span class="text-[10px] font-bold text-sky-900 uppercase tracking-widest bg-sky-100 border border-sky-300 px-2 py-0.5 rounded">Proposal B</span>
+                            <span class="text-xl font-black text-stone-900" x-text="comparisonData.proposal_b.score + '/100'"></span>
                         </div>
-                        <h3 class="text-lg font-bold text-slate-100" x-text="comparisonData.proposal_b.title"></h3>
+                        <h3 class="text-sm font-bold text-stone-900 font-typewriter" x-text="comparisonData.proposal_b.title"></h3>
 
-                        <div class="space-y-2 text-xs text-slate-300 pt-2 border-t border-slate-800">
+                        <div class="space-y-2 text-xs text-stone-700 pt-2 border-t border-stone-300 font-typewriter">
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Citizen Reports (Demand):</span>
-                                <span class="font-bold text-slate-100" x-text="comparisonData.proposal_b.citizen_reports + ' citizens'"></span>
+                                <span class="text-stone-600">Citizen Reports (Demand):</span>
+                                <span class="font-bold text-stone-900 font-ledger" x-text="comparisonData.proposal_b.citizen_reports + ' citizens'"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Linked Facility:</span>
-                                <span class="font-bold text-slate-100" x-text="comparisonData.proposal_b.facility_name"></span>
+                                <span class="text-stone-600">Linked Facility:</span>
+                                <span class="font-bold text-stone-900 font-ledger" x-text="comparisonData.proposal_b.facility_name"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Current Capacity:</span>
-                                <span class="font-bold text-slate-100" x-text="comparisonData.proposal_b.capacity"></span>
+                                <span class="text-stone-600">Current Capacity:</span>
+                                <span class="font-bold text-stone-900 font-ledger" x-text="comparisonData.proposal_b.capacity"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Current Enrollment:</span>
-                                <span class="font-bold text-slate-100" x-text="comparisonData.proposal_b.enrollment"></span>
+                                <span class="text-stone-600">Current Enrollment:</span>
+                                <span class="font-bold text-stone-900 font-ledger" x-text="comparisonData.proposal_b.enrollment"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Avg Travel Distance:</span>
-                                <span class="font-bold text-slate-100" x-text="comparisonData.proposal_b.avg_travel_distance_km + ' km'"></span>
+                                <span class="text-stone-600">Avg Travel Distance:</span>
+                                <span class="font-bold text-stone-900 font-ledger" x-text="comparisonData.proposal_b.avg_travel_distance_km + ' km'"></span>
                             </div>
                             <!-- Budget & Period Metrics -->
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Estimated Budget:</span>
-                                <span class="font-bold text-emerald-400" x-text="comparisonData.proposal_b.estimated_budget_kes"></span>
+                                <span class="text-stone-600">Estimated Budget:</span>
+                                <span class="font-bold text-emerald-900 font-ledger" x-text="comparisonData.proposal_b.estimated_budget_kes"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Implementation Period:</span>
-                                <span class="font-bold text-slate-100" x-text="comparisonData.proposal_b.implementation_period"></span>
+                                <span class="text-stone-600">Implementation Period:</span>
+                                <span class="font-bold text-stone-900 font-ledger" x-text="comparisonData.proposal_b.implementation_period"></span>
                             </div>
                             <!-- Demographic & CIDP Information -->
-                            <div class="flex justify-between pt-1 border-t border-slate-800/60">
-                                <span class="text-slate-500">Poverty Index Score:</span>
-                                <span class="font-bold text-amber-400" x-text="comparisonData.proposal_b.poverty_index_score"></span>
+                            <div class="flex justify-between pt-1 border-t border-stone-300/60">
+                                <span class="text-stone-600">Poverty Index Score:</span>
+                                <span class="font-bold text-amber-900 font-ledger" x-text="comparisonData.proposal_b.poverty_index_score"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span class="text-slate-500">Listed in Local Dev Plan (CIDP):</span>
-                                <span class="font-bold" :class="comparisonData.proposal_b.is_in_cidp_plan ? 'text-emerald-400' : 'text-slate-400'" x-text="comparisonData.proposal_b.is_in_cidp_plan ? 'Yes (Priority Target)' : 'No'"></span>
+                                <span class="text-stone-600">Listed in Local Dev Plan (CIDP):</span>
+                                <span class="font-bold font-ledger" :class="comparisonData.proposal_b.is_in_cidp_plan ? 'text-emerald-900' : 'text-stone-600'" x-text="comparisonData.proposal_b.is_in_cidp_plan ? 'Yes (Priority Target)' : 'No'"></span>
                             </div>
                         </div>
                     </div>

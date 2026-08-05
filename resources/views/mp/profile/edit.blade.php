@@ -1,36 +1,36 @@
 <x-layout title="Edit MP Profile">
     <div x-data="editProfilePage()" x-init="fetchProfile()" class="max-w-xl space-y-6">
-        <div>
-            <h1 class="text-2xl font-bold text-slate-100">Update Profile</h1>
-            <p class="text-sm text-slate-400">Modify your account information.</p>
+        <div class="border-b border-stone-400/40 pb-4">
+            <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase" style="color:white">Update Profile</h1>
+            <p class="text-xs text-stone-700 font-typewriter mt-1" style="color:white">Modify your account information.</p>
         </div>
 
         <!-- Success & Error Alert Banners -->
-        <div x-show="successMessage" x-text="successMessage" class="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm rounded-xl" style="display:none;"></div>
-        <div x-show="errorMessage" x-text="errorMessage" class="p-4 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl" style="display:none;"></div>
+        <div x-show="successMessage" x-text="successMessage" class="p-4 bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs rounded font-typewriter shadow-xs" style="display:none;"></div>
+        <div x-show="errorMessage" x-text="errorMessage" class="p-4 bg-red-100 border border-red-300 text-red-900 text-xs rounded font-typewriter shadow-xs" style="display:none;"></div>
 
-        <form @submit.prevent="updateProfile()" class="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-5">
+        <form @submit.prevent="updateProfile()" class="torn-card p-6 space-y-5 border border-stone-300 font-typewriter">
             <div>
-                <label class="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-2">MP Name</label>
-                <input type="text" x-model="form.mp_name" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-emerald-500 transition">
+                <label class="block text-[10px] uppercase tracking-wider text-stone-700 font-bold mb-2">MP Name</label>
+                <input type="text" x-model="form.mp_name" required class="w-full bg-white border border-stone-300 rounded px-3 py-2 text-xs text-stone-900 shadow-xs focus:outline-none focus:border-stone-500 font-ledger">
             </div>
 
             <div>
-                <label class="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-2">Email Address</label>
-                <input type="email" x-model="form.email" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-emerald-500 transition">
+                <label class="block text-[10px] uppercase tracking-wider text-stone-700 font-bold mb-2">Email Address</label>
+                <input type="email" x-model="form.email" required class="w-full bg-white border border-stone-300 rounded px-3 py-2 text-xs text-stone-900 shadow-xs focus:outline-none focus:border-stone-500 font-ledger">
             </div>
 
             <div>
-                <label class="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-2">Constituency Name</label>
-                <input type="text" x-model="form.constituency_name" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-emerald-500 transition">
+                <label class="block text-[10px] uppercase tracking-wider text-stone-700 font-bold mb-2">Constituency Name</label>
+                <input type="text" x-model="form.constituency_name" class="w-full bg-white border border-stone-300 rounded px-3 py-2 text-xs text-stone-900 shadow-xs focus:outline-none focus:border-stone-500 font-ledger">
             </div>
 
-            <div class="flex items-center space-x-3 pt-2">
-                <button type="submit" :disabled="saving" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-5 py-3 rounded-xl transition">
+            <div class="flex items-center space-x-3 pt-2 border-t border-stone-300">
+                <button type="submit" :disabled="saving" class="bg-emerald-100 hover:bg-emerald-200 disabled:opacity-40 text-emerald-900 border border-emerald-300 font-semibold px-4 py-2 rounded text-xs transition shadow-xs">
                     <span x-show="!saving">Save Changes</span>
                     <span x-show="saving" style="display:none;">Saving...</span>
                 </button>
-                <a href="/mp/profile/show" class="text-slate-400 hover:text-slate-200 text-sm px-4 py-3">Cancel</a>
+                <a href="/mp/profile/show" class="text-stone-700 hover:text-stone-900 text-xs px-3 py-2 underline">Cancel</a>
             </div>
         </form>
     </div>
