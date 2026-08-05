@@ -3,8 +3,8 @@
 
         <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 border-b border-stone-400/40 pb-4">
             <div>
-                <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase" style="color:white;">All Requests</h1>
-                <p class="text-xs text-stone-700 font-typewriter mt-1" style="color:white">Search and filter every citizen submission for your constituency.</p>
+                <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase">All Requests</h1>
+                <p class="text-xs text-stone-700 font-typewriter mt-1">Search and filter every citizen submission for your constituency.</p>
             </div>
             <a href="/mp/dashboard" class="text-xs text-emerald-900 font-typewriter font-semibold hover:underline">← Back to sector overview</a>
         </div>

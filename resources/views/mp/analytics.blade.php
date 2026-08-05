@@ -3,8 +3,8 @@
         <!-- Page Header -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-400/40 pb-4">
             <div>
-                <h1 class="text-2xl font-black text-stone-900 font-typewriter tracking-tight uppercase" style="color:white;">Analytics & Trends</h1>
-                <p class="text-xs text-stone-700 font-typewriter mt-1" style="color:white;">Live operational reporting from constituent request data — turned into development planning signals.</p>
+                <h1 class="text-2xl font-black text-stone-900 font-typewriter tracking-tight uppercase" >Analytics & Trends</h1>
+                <p class="text-xs text-stone-700 font-typewriter mt-1" >Live operational reporting from constituent request data — turned into development planning signals.</p>
             </div>
             
             <button @click="fetchAnalytics()" class="bg-white hover:bg-stone-100 border border-stone-400 text-stone-900 font-typewriter font-semibold px-4 py-2 rounded text-xs transition flex items-center gap-2 shadow-xs">

@@ -3,8 +3,8 @@
 
         <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 border-b border-stone-400/40 pb-4">
             <div>
-                <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase" style="color:white;">Priority Board</h1>
-                <p class="text-xs text-stone-700 font-typewriter mt-1" style="color:white;">AI recommends ranking and a fundable bundle. You decide the final allocation.</p>
+                <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase">Priority Board</h1>
+                <p class="text-xs text-stone-700 font-typewriter mt-1">AI recommends ranking and a fundable bundle. You decide the final allocation.</p>
             </div>
             <div class="flex flex-wrap gap-2 font-typewriter">
                 <button @click="rescore()" class="px-4 py-2 rounded text-xs bg-[#e6dfd1] border border-stone-400/60 text-stone-900 hover:bg-[#dcd5c1] transition shadow-sm">

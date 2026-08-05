@@ -6,8 +6,8 @@
 
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-400/40 pb-4">
             <div>
-                <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase" style="color:white;">Demand Hotspots &amp; Recurring Themes</h1>
-                <p class="text-xs text-stone-700 font-typewriter" style="color:white;">
+                <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase">Demand Hotspots &amp; Recurring Themes</h1>
+                <p class="text-xs text-stone-700 font-typewriter">
                     Geographic demand signals — matches are theme evidence, not duplicates to dismiss.
                 </p>
             </div>

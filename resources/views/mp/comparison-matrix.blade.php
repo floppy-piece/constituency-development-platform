@@ -4,8 +4,8 @@
         <!-- Header -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-400/40 pb-4">
             <div>
-                <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase" style="color:white;">Proposal Comparison & Feasibility Matrix</h1>
-                <p class="text-xs text-stone-700 font-typewriter mt-1" style="color:white;">Weigh competing constituent requests against real infrastructure metrics, demographic poverty indexes, and CIDP plans.</p>
+                <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase" >Proposal Comparison & Feasibility Matrix</h1>
+                <p class="text-xs text-stone-700 font-typewriter mt-1" >Weigh competing constituent requests against real infrastructure metrics, demographic poverty indexes, and CIDP plans.</p>
             </div>
         </div>
 

@@ -1,4 +1,12 @@
-<x-layout title="Privacy Policy">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    
     <div class="max-w-4xl mx-auto space-y-8 py-6 px-4 font-typewriter">
         
         <!-- Header -->
@@ -119,4 +127,5 @@
         </div>
 
     </div>
-</x-layout>
+</body>
+</html>

@@ -4,8 +4,8 @@
         <!-- Header -->
         <div class="flex items-center justify-between border-b border-stone-400/40 pb-4">
             <div>
-                <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase" style="color:white">MP Profile Details</h1>
-                <p class="text-xs text-stone-700 font-typewriter mt-1" style="color:white">View and manage your registered MP details.</p>
+                <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase" >MP Profile Details</h1>
+                <p class="text-xs text-stone-700 font-typewriter mt-1" >View and manage your registered MP details.</p>
             </div>
             
             <a href="/mp/profile/edit" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 font-typewriter text-xs font-semibold px-4 py-2 rounded transition shadow-xs">

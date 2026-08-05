@@ -4,8 +4,8 @@
         <!-- Header Section -->
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-stone-400/40 pb-4">
             <div>
-                <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase" style="color:white;">Constituency Requests Dashboard</h1>
-                <p class="text-xs text-stone-700 font-typewriter" style="color:white;">Real-time issues submitted by citizens in your constituency.</p>
+                <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase" >Constituency Requests Dashboard</h1>
+                <p class="text-xs text-stone-700 font-typewriter">Real-time issues submitted by citizens in your constituency.</p>
             </div>
             
             <button @click="fetchDashboard()" class="inline-flex items-center space-x-2 bg-[#e6dfd1] border border-stone-400/60 hover:bg-[#dcd5c1] text-stone-900 px-4 py-2 rounded font-typewriter text-xs transition shadow-sm">

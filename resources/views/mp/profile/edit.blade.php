@@ -1,8 +1,8 @@
 <x-layout title="Edit MP Profile">
     <div x-data="editProfilePage()" x-init="fetchProfile()" class="max-w-xl space-y-6">
         <div class="border-b border-stone-400/40 pb-4">
-            <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase" style="color:white">Update Profile</h1>
-            <p class="text-xs text-stone-700 font-typewriter mt-1" style="color:white">Modify your account information.</p>
+            <h1 class="text-2xl font-bold text-stone-900 font-typewriter tracking-wide uppercase" >Update Profile</h1>
+            <p class="text-xs text-stone-700 font-typewriter mt-1" >Modify your account information.</p>
         </div>
 
         <!-- Success & Error Alert Banners -->
